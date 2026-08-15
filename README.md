@@ -8,10 +8,13 @@
 |------|------|------|------|
 | GPIO | LED1 Green | PB0 | 已启用 |
 | GPIO | LED0 Red | PB1 | 已启用 |
+| GPIO | LCD Backlight | PB5 | 已启用 |
 | USART1 | 调试串口 (printf) | PA9 (TX), PA10 (RX) | 已启用 |
 | TIM7 | HAL 系统时基 | 内部 | 已启用 |
 | FreeRTOS | CMSIS-RTOS V2 | - | 已启用 |
 | FMC SDRAM | W9825G6KH (32MB) | FMC Bank1 | 已启用 |
+| LTDC | 4.3" RGB LCD (800x480) | 28-pin TTL | 已启用 |
+| DMA2D | 图形加速 | 内部 | 已启用 |
 
 ## 时钟树
 
@@ -50,17 +53,23 @@ STM32_H743_ALIENTEK_CubeIDE/
 │   │   ├── main.h                  # 主头文件
 │   │   ├── gpio.h                  # GPIO 配置
 │   │   ├── usart.h                 # USART 配置
+│   │   ├── lcd.h                   # LCD 驱动接口
 │   │   ├── stm32h7xx_hal_conf.h    # HAL 配置
 │   │   └── stm32h7xx_it.h          # 中断服务声明
 │   ├── Src/
 │   │   ├── main.c                  # 主程序
 │   │   ├── gpio.c                  # GPIO 初始化
 │   │   ├── usart.c                 # USART 初始化
+│   │   ├── fmc.c                   # FMC SDRAM 初始化
+│   │   ├── ltdc.c                  # LTDC 初始化
+│   │   ├── dma2d.c                 # DMA2D 初始化
+│   │   ├── lcd.c                   # LCD 驱动 (DMA2D 加速)
+│   │   ├── freertos.c              # FreeRTOS 任务
 │   │   ├── stm32h7xx_hal_msp.c     # HAL MSP 配置
 │   │   ├── stm32h7xx_hal_timebase_tim.c  # TIM7 时基
 │   │   ├── stm32h7xx_it.c          # 中断服务实现
 │   │   ├── system_stm32h7xx.c      # 系统初始化
-│   │   ├── syscalls.c              # 系统调用
+│   │   ├── syscalls.c              # 系统调用 (printf 重定向)
 │   │   └── sysmem.c                # 内存管理
 │   └── Startup/                    # 启动文件
 ├── Drivers/
@@ -76,18 +85,20 @@ STM32_H743_ALIENTEK_CubeIDE/
 
 ```
 main()
-  ├── MPU_Config()            # MPU 配置 (背景区域 4GB, 禁止访问)
+  ├── MPU_Config()            # MPU 配置 (背景区域 4GB + SDRAM 32MB)
   ├── SCB_EnableICache()      # 使能 I-Cache
   ├── SCB_EnableDCache()      # 使能 D-Cache
   ├── HAL_Init()              # HAL 库初始化
   ├── SystemClock_Config()    # 系统时钟配置 (400MHz)
-  ├── MX_GPIO_Init()          # GPIO 初始化 (PB0, PB1)
+  ├── MX_GPIO_Init()          # GPIO 初始化 (PB0, PB1, PB5)
   ├── MX_USART1_UART_Init()   # 调试串口初始化 (PA9, PA10)
   ├── MX_FMC_Init()           # FMC / SDRAM 初始化 (W9825G6KH)
+  ├── MX_DMA2D_Init()         # DMA2D 初始化
+  ├── MX_LTDC_Init()          # LTDC 初始化 (800x480, 帧缓冲@0xC0000000)
   ├── osKernelInitialize()    # FreeRTOS 内核初始化
   ├── MX_FREERTOS_Init()      # 创建 defaultTask 线程
   └── osKernelStart()         # 启动调度器
-       └── StartDefaultTask()  # 打印系统时钟信息 → 进入主循环
+       └── StartDefaultTask()  # 打印时钟 → SDRAM 测试 → LCD 测试 → LED 闪烁
 ```
 
 ## printf 重定向
@@ -113,6 +124,27 @@ int __io_putchar(int ch)
   APB1:   100 MHz
   APB2:   100 MHz
 ========================================
+```
+
+## LCD 驱动 (LTDC + DMA2D)
+
+- 分辨率：800x480 RGB565，4.3" TFT-LCD
+- 帧缓冲位于 SDRAM 起始地址 `0xC0000000`
+- 帧缓冲步幅（ImageWidth）为 1600 像素，有效显示区域 800 像素
+- DMA2D 用于硬件加速填充（`LCD_Clear` / `LCD_Fill`）
+
+**重要**：STM32H7 的 `HAL_SDRAM_Init` 不会自动发送 SDRAM 初始化命令序列，需在 `MX_FMC_Init` 中手动调用：
+- `HAL_SDRAM_SendCommand` (CLK_ENABLE → PALL → AUTOREFRESH ×8 → LOAD_MODE)
+- `HAL_SDRAM_ProgramRefreshRate` (设置刷新计数器)
+
+上电后 LCD 依次显示红、绿、蓝、白色，最终停在白色。
+
+```c
+// 基本用法
+LCD_Init();                    // 打开背光
+LCD_Clear(LCD_COLOR_BLACK);   // 清除为黑色
+LCD_Fill(0, 0, 100, 100, LCD_COLOR_RED);  // 填充红色矩形
+LCD_DrawPixel(50, 50, LCD_COLOR_WHITE);  // 画一个白点
 ```
 
 ## 开发环境
@@ -144,11 +176,10 @@ int __io_putchar(int ch)
 
 ## 学习路线 (待完成)
 
-- [x] GPIO 输出 (PB0/PB1 LED)
+- [x] GPIO 输出 (PB0/PB1 LED, PB5 背光)
 - [x] USART 调试串口 + printf 重定向
 - [x] FreeRTOS (CMSIS-RTOS V2)
 - [x] SDRAM 驱动 (W9825G6KH)
-- [ ] RGB LCD 显示 (LTDC)
-- [ ] DMA2D 图形加速
+- [x] RGB LCD 显示 (LTDC + DMA2D)
 - [ ] QSPI Flash
 - [ ] ...

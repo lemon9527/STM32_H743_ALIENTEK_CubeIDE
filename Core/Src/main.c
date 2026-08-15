@@ -20,6 +20,8 @@
 #include "main.h"
 #include "FreeRTOS.h"
 #include "cmsis_os2.h"
+#include "dma2d.h"
+#include "ltdc.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
@@ -105,6 +107,8 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_FMC_Init();
+  MX_DMA2D_Init();
+  MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
 
   /* Enable IO compensation cell (required for FMC high-speed IOs) */

@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,7 +53,7 @@
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 512 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 
@@ -161,6 +162,35 @@ void StartDefaultTask(void *argument)
 
     printf("  Result: %s\r\n", pass ? "PASS" : "FAIL");
   }
+  printf("========================================\r\n");
+  printf("\r\n");
+
+  /* LCD test */
+  printf("========================================\r\n");
+  printf("  LCD Test (4.3\" RGB 800x480)\r\n");
+  printf("========================================\r\n");
+
+  /* Turn on backlight */
+  LCD_Init();
+  printf("  Backlight ON (PB5)\r\n");
+
+  /* Fill screen with colors */
+  printf("  Red screen...\r\n");
+  LCD_Clear(LCD_COLOR_RED);
+  osDelay(1000);
+
+  printf("  Green screen...\r\n");
+  LCD_Clear(LCD_COLOR_GREEN);
+  osDelay(1000);
+
+  printf("  Blue screen...\r\n");
+  LCD_Clear(LCD_COLOR_BLUE);
+  osDelay(1000);
+
+  printf("  White screen...\r\n");
+  LCD_Clear(LCD_COLOR_WHITE);
+
+  printf("  Result: PASS\r\n");
   printf("========================================\r\n");
   printf("\r\n");
 

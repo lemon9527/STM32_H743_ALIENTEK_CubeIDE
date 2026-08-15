@@ -131,6 +131,8 @@ void Error_Handler(void);
 #define FMC_D3_GPIO_Port GPIOD
 #define FMC_SDNCAS_Pin GPIO_PIN_15
 #define FMC_SDNCAS_GPIO_Port GPIOG
+#define LCD_BL_Pin GPIO_PIN_5
+#define LCD_BL_GPIO_Port GPIOB
 #define FMC_NBL0_Pin GPIO_PIN_0
 #define FMC_NBL0_GPIO_Port GPIOE
 #define FMC_NBL1_Pin GPIO_PIN_1
