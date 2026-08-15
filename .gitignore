@@ -1,0 +1,43 @@
+# STM32 CubeMX / Build Output
+Debug/
+Release/
+build/
+*/build/
+
+# CubeIDE project (generated, can be regenerated from .ioc)
+.metadata/
+.mxproject
+.osx.project
+
+# Object files
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+*.axf
+*.map
+*.d
+*.list
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Temp files
+*.swp
+*.swo
+*~
