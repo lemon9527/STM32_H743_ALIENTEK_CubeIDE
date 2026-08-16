@@ -28,6 +28,10 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "lcd.h"
+#include "lvgl.h"
+#include "lv_port_disp.h"
+#include "lv_port_indev.h"
+#include "animation.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +51,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+static osTimerId_t anim_timer_id;
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -56,10 +60,18 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for animTask */
+osThreadId_t animTaskHandle;
+const osThreadAttr_t animTask_attributes = {
+  .name = "animTask",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+void StartAnimationTask(void *argument);
+void AnimTimerCallback(void *argument);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -86,6 +98,8 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+  anim_timer_id = osTimerNew(AnimTimerCallback, osTimerPeriodic, NULL, NULL);
+  osTimerStart(anim_timer_id, 50U);  /* 50ms period for 20fps animation */
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -98,6 +112,7 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  animTaskHandle = osThreadNew(StartAnimationTask, NULL, &animTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -116,89 +131,72 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+  uint32_t sysclk, hclk, apb1, apb2;
+  uint32_t sdram_base = 0xC0000000;
+  uint32_t sdram_size = 0x02000000;
+  uint32_t test_pattern, readback1, readback2, end_addr;
+  int sdram_pass = 1;
+  int led_tick = 0;
 
-  /* Print system clock info on startup */
+  /* Get system clock info */
+  sysclk = (unsigned long)HAL_RCC_GetSysClockFreq() / 1000000;
+  hclk   = (unsigned long)HAL_RCC_GetHCLKFreq() / 1000000;
+  apb1   = (unsigned long)HAL_RCC_GetPCLK1Freq() / 1000000;
+  apb2   = (unsigned long)HAL_RCC_GetPCLK2Freq() / 1000000;
+
+  /* ---------- Serial output ---------- */
   printf("\r\n");
   printf("========================================\r\n");
   printf("  STM32H743 System Clock Info\r\n");
   printf("========================================\r\n");
-  printf("  SYSCLK: %lu MHz\r\n", (unsigned long)HAL_RCC_GetSysClockFreq() / 1000000);
-  printf("  HCLK:   %lu MHz\r\n", (unsigned long)HAL_RCC_GetHCLKFreq() / 1000000);
-  printf("  APB1:   %lu MHz\r\n", (unsigned long)HAL_RCC_GetPCLK1Freq() / 1000000);
-  printf("  APB2:   %lu MHz\r\n", (unsigned long)HAL_RCC_GetPCLK2Freq() / 1000000);
-  printf("========================================\r\n");
-  printf("\r\n");
+  printf("  SYSCLK: %lu MHz\r\n", sysclk);
+  printf("  HCLK:   %lu MHz\r\n", hclk);
+  printf("  APB1:   %lu MHz\r\n", apb1);
+  printf("  APB2:   %lu MHz\r\n", apb2);
+  printf("========================================\r\n\n");
 
   printf("========================================\r\n");
   printf("  SDRAM Test (W9825G6KH)\r\n");
   printf("========================================\r\n");
-  {
-    uint32_t sdram_base = 0xC0000000;
-    uint32_t sdram_size = 0x02000000;  /* 32MB */
-    uint32_t test_pattern = 0xAA55AA55;
-    uint32_t readback;
-    int pass = 1;
+  printf("  Base: 0x%08lX\r\n", (unsigned long)sdram_base);
+  printf("  Size: %lu MB\r\n", (unsigned long)(sdram_size / 1024 / 1024));
 
-    printf("  Base: 0x%08lX\r\n", (unsigned long)sdram_base);
-    printf("  Size: %lu MB\r\n", (unsigned long)(sdram_size / 1024 / 1024));
+  test_pattern = 0xAA55AA55;
+  *((volatile uint32_t *)sdram_base) = test_pattern;
+  readback1 = *((volatile uint32_t *)sdram_base);
+  printf("  [0x%08lX] W:0x%08lX R:0x%08lX %s\r\n",
+             (unsigned long)sdram_base, (unsigned long)test_pattern, (unsigned long)readback1,
+             (readback1 == test_pattern) ? "OK" : "FAIL");
+  if (readback1 != test_pattern) sdram_pass = 0;
 
-    /* Test 1: write/read at start */
-    *((volatile uint32_t *)sdram_base) = test_pattern;
-    readback = *((volatile uint32_t *)sdram_base);
-    printf("  [0x%08lX] W:0x%08lX R:0x%08lX %s\r\n",
-               (unsigned long)sdram_base, (unsigned long)test_pattern, (unsigned long)readback,
-               (readback == test_pattern) ? "OK" : "FAIL");
-    if (readback != test_pattern) pass = 0;
+  end_addr = sdram_base + sdram_size - 4;
+  test_pattern = 0x55AA55AA;
+  *((volatile uint32_t *)end_addr) = test_pattern;
+  readback2 = *((volatile uint32_t *)end_addr);
+  printf("  [0x%08lX] W:0x%08lX R:0x%08lX %s\r\n",
+             (unsigned long)end_addr, (unsigned long)test_pattern, (unsigned long)readback2,
+             (readback2 == test_pattern) ? "OK" : "FAIL");
+  if (readback2 != test_pattern) sdram_pass = 0;
 
-    /* Test 2: write/read at end */
-    uint32_t end_addr = sdram_base + sdram_size - 4;
-    test_pattern = 0x55AA55AA;
-    *((volatile uint32_t *)end_addr) = test_pattern;
-    readback = *((volatile uint32_t *)end_addr);
-    printf("  [0x%08lX] W:0x%08lX R:0x%08lX %s\r\n",
-               (unsigned long)end_addr, (unsigned long)test_pattern, (unsigned long)readback,
-               (readback == test_pattern) ? "OK" : "FAIL");
-    if (readback != test_pattern) pass = 0;
+  printf("  Result: %s\r\n", sdram_pass ? "PASS" : "FAIL");
+  printf("========================================\r\n\n");
 
-    printf("  Result: %s\r\n", pass ? "PASS" : "FAIL");
-  }
-  printf("========================================\r\n");
-  printf("\r\n");
+  printf("Animation starting...\r\n");
 
-  /* LCD test */
-  printf("========================================\r\n");
-  printf("  LCD Test (4.3\" RGB 800x480)\r\n");
-  printf("========================================\r\n");
-
-  /* Turn on backlight */
+  /* Turn on LCD backlight (LVGL will manage the display) */
   LCD_Init();
-  printf("  Backlight ON (PB5)\r\n");
 
-  /* Fill screen with colors */
-  printf("  Red screen...\r\n");
-  LCD_Clear(LCD_COLOR_RED);
-  osDelay(1000);
-
-  printf("  Green screen...\r\n");
-  LCD_Clear(LCD_COLOR_GREEN);
-  osDelay(1000);
-
-  printf("  Blue screen...\r\n");
-  LCD_Clear(LCD_COLOR_BLUE);
-  osDelay(1000);
-
-  printf("  White screen...\r\n");
-  LCD_Clear(LCD_COLOR_WHITE);
-
-  printf("  Result: PASS\r\n");
-  printf("========================================\r\n");
-  printf("\r\n");
-
-  /* Infinite loop */
+  /* Infinite loop - LED blink only, LVGL manages the display */
   for(;;)
   {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);  /* Toggle LED1 Green (PB0) */
-    osDelay(500);                            /* 500ms */
+    /* LED blink: toggle every 500ms (10 ticks * 50ms) */
+    led_tick++;
+    if (led_tick >= 10)
+    {
+      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
+      led_tick = 0;
+    }
+    osDelay(50);
   }
   /* USER CODE END StartDefaultTask */
 }

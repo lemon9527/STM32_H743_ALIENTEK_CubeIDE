@@ -7,10 +7,13 @@
 extern "C" {
 #endif
 
-/* LCD parameters */
-#define LCD_WIDTH       800
-#define LCD_HEIGHT      480
-#define LCD_FB_STRIDE   1600    /* framebuffer row stride in pixels (ImageWidth) */
+/* Portrait mode: 480x800 logical on 800x480 physical panel */
+#define LCD_WIDTH       480
+#define LCD_HEIGHT      800
+#define LCD_FB_STRIDE   1600    /* physical row stride in pixels (LTDC ImageWidth) */
+
+/* Font scale factor (2x = 16x32 effective) */
+#define LCD_FONT_SCALE  2
 
 /* Framebuffer base address in SDRAM */
 #define LCD_FB_BASE     0xC0000000
@@ -37,6 +40,7 @@ void LCD_Init(void);
 void LCD_Clear(uint16_t color);
 void LCD_Fill(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color);
 void LCD_DrawPixel(uint16_t x, uint16_t y, uint16_t color);
+void LCD_ShowString(uint16_t x, uint16_t y, const char *str, uint16_t color, uint16_t bg_color);
 
 #ifdef __cplusplus
 }
