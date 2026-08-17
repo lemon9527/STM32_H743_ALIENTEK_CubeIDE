@@ -2,20 +2,15 @@
  * @file animation.c
  * @brief 320x320 20fps animation playback engine
  *
- * Phase 2: plays 5 test frames from internal flash via DMA2D.
+ * Phase 2: plays 5 test frames from internal flash.
  * Uses FreeRTOS 50ms timer + semaphore for frame pacing.
- * Frames are pre-rotated 90° CCW on PC side.
  */
 
 #include "animation.h"
 #include "lcd.h"
-#include "dma2d.h"
 #include "cmsis_os2.h"
 #include <stdio.h>
 #include <string.h>
-
-/* DMA2D handle (initialized by CubeMX in dma2d.c) */
-extern DMA2D_HandleTypeDef hdma2d;
 
 /* Linker symbols: test frame data embedded via test_frames.o */
 extern const uint16_t _binary__Users_lemonliu_IOT_STM32_H743_ALIENTEK_CubeIDE_Core_Src_frames_test_5_bin_start;
@@ -28,15 +23,13 @@ static osSemaphoreId_t anim_sem_id = NULL;
 static volatile int frame_index = 0;
 
 /*---------------------------------------------------------------------------
- * DMA2D rectangle copy (no rotation, source is contiguous)
+ * CPU copy (line-by-line to handle framebuffer stride)
  *---------------------------------------------------------------------------
- * Copies a 320x320 RGB565 rectangle from src to the physical framebuffer.
- * Pattern: same as LCD_Clear in lcd.c — temporarily switch DMA2D mode,
- * perform the copy, then restore default M2M_PFC mode.
+ * DMA2D M2M mode is deferred due to startup crash issues.
+ * CPU memcpy is ~2ms for 200KB on 400MHz H7, well within 50ms budget.
  */
-static void DMA2D_CopyFrame(const uint16_t *src, uint16_t *dst)
+static void CopyFrame(const uint16_t *src, uint16_t *dst)
 {
-    /* CPU memcpy line-by-line (handles stride). DMA2D optimization deferred. */
     for (int y = 0; y < ANIM_FRAME_HEIGHT; y++)
     {
         memcpy(dst + y * LCD_FB_STRIDE, src + y * ANIM_FRAME_WIDTH,
@@ -47,8 +40,6 @@ static void DMA2D_CopyFrame(const uint16_t *src, uint16_t *dst)
 /*---------------------------------------------------------------------------
  * Timer callback (50ms = 20fps)
  *---------------------------------------------------------------------------
- * Called from FreeRTOS timer service task. Increments frame index and
- * signals the animation task to copy the next frame.
  */
 void AnimTimerCallback(void *argument)
 {
@@ -60,20 +51,21 @@ void AnimTimerCallback(void *argument)
 /*---------------------------------------------------------------------------
  * Animation task
  *---------------------------------------------------------------------------
- * Initializes the display, creates the sync semaphore, then loops:
- * wait for timer → DMA2D copy current frame to framebuffer.
  */
 void StartAnimationTask(void *argument)
 {
     (void)argument;
 
+    /* Give defaultTask time to finish init (LCD, USART, etc.) */
+    osDelay(500);
+
     /* Create binary semaphore: max count = 1, initial count = 0 */
     anim_sem_id = osSemaphoreNew(1, 0, NULL);
 
-    /* Clear screen to black using DMA2D R2M fill */
+    /* Clear screen to black */
     LCD_Clear(LCD_COLOR_BLACK);
 
-    /* Destination pointer: physical framebuffer at (240, 80) */
+    /* Destination pointer: physical framebuffer centered at (240, 80) */
     uint16_t *dst = (uint16_t *)LCD_FB_BASE
                   + ANIM_DST_Y * LCD_FB_STRIDE
                   + ANIM_DST_X;
@@ -86,7 +78,7 @@ void StartAnimationTask(void *argument)
         /* Wait for 50ms timer to signal next frame */
         osSemaphoreAcquire(anim_sem_id, osWaitForever);
 
-        /* Copy current frame to framebuffer via DMA2D */
-        DMA2D_CopyFrame(&test_frames[frame_index * ANIM_FRAME_PIXELS], dst);
+        /* Copy current frame to framebuffer */
+        CopyFrame(&test_frames[frame_index * ANIM_FRAME_PIXELS], dst);
     }
 }

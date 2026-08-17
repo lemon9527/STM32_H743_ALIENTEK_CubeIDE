@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "make",
+      "args": ["-C", "${workspaceRoot}/Debug", "all"],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always" }
+    },
+    {
+      "label": "OpenOCD: Flash ELF",
+      "type": "shell",
+      "dependsOn": "Build",
+      "command": "/opt/homebrew/bin/openocd",
+      "args": [
+        "-f", "interface/cmsis-dap.cfg",
+        "-f", "target/stm32h7x.cfg",
+        "-c", "init; reset init; program ${workspaceRoot}/Debug/STM32_H743_ALIENTEK_CubeIDE.elf verify reset exit"
+      ],
+      "presentation": { "reveal": "always" }
+    },
+    {
+      "label": "OpenOCD: Flash ELF (No Build)",
+      "type": "shell",
+      "command": "/opt/homebrew/bin/openocd",
+      "args": [
+        "-f", "interface/cmsis-dap.cfg",
+        "-f", "target/stm32h7x.cfg",
+        "-c", "init; reset init; program ${workspaceRoot}/Debug/STM32_H743_ALIENTEK_CubeIDE.elf verify reset exit"
+      ],
+      "presentation": { "reveal": "always" }
+    },
+    {
+      "label": "OpenOCD: Flash HEX",
+      "type": "shell",
+      "command": "/opt/homebrew/bin/openocd",
+      "args": [
+        "-f", "interface/cmsis-dap.cfg",
+        "-f", "target/stm32h7x.cfg",
+        "-c", "init; reset init; adapter_khz 1000; flash write_image erase ${workspaceRoot}/Debug/STM32_H743_ALIENTEK_CubeIDE.hex 0x08000000; reset run; shutdown"
+      ],
+      "presentation": { "reveal": "always" }
+    }
+  ]
+}

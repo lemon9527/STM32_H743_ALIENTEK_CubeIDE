@@ -60,7 +60,8 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for animTask */
+
+/* Definitions for animation task */
 osThreadId_t animTaskHandle;
 const osThreadAttr_t animTask_attributes = {
   .name = "animTask",

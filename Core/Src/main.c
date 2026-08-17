@@ -22,9 +22,12 @@
 #include "cmsis_os2.h"
 #include "dma2d.h"
 #include "ltdc.h"
+#include "quadspi.h"
+#include "qspi_flash.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -109,10 +112,17 @@ int main(void)
   MX_FMC_Init();
   MX_DMA2D_Init();
   MX_LTDC_Init();
+  MX_QUADSPI_Init();
   /* USER CODE BEGIN 2 */
 
   /* Enable IO compensation cell (required for FMC high-speed IOs) */
   HAL_EnableCompensationCell();
+
+  /* Initialize QSPI flash (probe JEDEC, set 4-byte mode) */
+  if (QSPI_Flash_Init() != HAL_OK)
+  {
+    printf("QSPI_Flash_Init failed\r\n");
+  }
 
   /* Enable BusFault, MemManage, UsageFault exceptions */
   SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_USGFAULTENA_Msk;

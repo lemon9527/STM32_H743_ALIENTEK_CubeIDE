@@ -175,12 +175,12 @@ void StartAnimationTask(void *argument);
 **QUADSPI 引脚（正点原子 H743 开发板）：**
 | 引脚 | 功能 |
 |------|------|
+| PF6 | QUADSPI_BK1_IO3 |
+| PF7 | QUADSPI_BK1_IO2 |
+| PF8 | QUADSPI_BK1_IO0 |
+| PF9 | QUADSPI_BK1_IO1 |
 | PB2 | QUADSPI_CLK |
-| PB6 | QUADSPI_NCS |
-| PD11 | QUADSPI_BK1_IO0 |
-| PD12 | QUADSPI_BK1_IO1 |
-| PE2 | QUADSPI_BK1_IO2 |
-| PD13 | QUADSPI_BK1_IO3 |
+| PB6 | QUADSPI_BK1_NCS |
 
 - Clock Prescaler: 1（QSPI 时钟 = 100 MHz）
 - FIFO Threshold: 4

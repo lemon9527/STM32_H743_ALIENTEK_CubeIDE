@@ -1,0 +1,8 @@
+[
+  {
+    "key": "cmd+alt+f",
+    "command": "workbench.action.tasks.runTask",
+    "args": "OpenOCD: Flash ELF (No Build)",
+    "when": "editorTextFocus"
+  }
+]

@@ -69,6 +69,14 @@ void Error_Handler(void);
 #define FMC_A4_GPIO_Port GPIOF
 #define FMC_A5_Pin GPIO_PIN_5
 #define FMC_A5_GPIO_Port GPIOF
+#define QSPI_BK1_IO3_Pin GPIO_PIN_6
+#define QSPI_BK1_IO3_GPIO_Port GPIOF
+#define QSPI_BK1_IO2_Pin GPIO_PIN_7
+#define QSPI_BK1_IO2_GPIO_Port GPIOF
+#define QSPI_BK1_IO0_Pin GPIO_PIN_8
+#define QSPI_BK1_IO0_GPIO_Port GPIOF
+#define QSPI_BK1_IO1_Pin GPIO_PIN_9
+#define QSPI_BK1_IO1_GPIO_Port GPIOF
 #define FMC_SDNWE_Pin GPIO_PIN_0
 #define FMC_SDNWE_GPIO_Port GPIOC
 #define FMC_SDNE0_Pin GPIO_PIN_2
@@ -81,6 +89,8 @@ void Error_Handler(void);
 #define KEY1_GPIO_Port GPIOH
 #define KEY0_Pin GPIO_PIN_3
 #define KEY0_GPIO_Port GPIOH
+#define QSPI_CLK_Pin GPIO_PIN_2
+#define QSPI_CLK_GPIO_Port GPIOB
 #define FMC_SDNRAS_Pin GPIO_PIN_11
 #define FMC_SDNRAS_GPIO_Port GPIOF
 #define FMC_A6_Pin GPIO_PIN_12
@@ -141,6 +151,8 @@ void Error_Handler(void);
 #define FMC_SDNCAS_GPIO_Port GPIOG
 #define LCD_BL_Pin GPIO_PIN_5
 #define LCD_BL_GPIO_Port GPIOB
+#define QSPI_BK1_NCS_Pin GPIO_PIN_6
+#define QSPI_BK1_NCS_GPIO_Port GPIOB
 #define FMC_NBL0_Pin GPIO_PIN_0
 #define FMC_NBL0_GPIO_Port GPIOE
 #define FMC_NBL1_Pin GPIO_PIN_1
