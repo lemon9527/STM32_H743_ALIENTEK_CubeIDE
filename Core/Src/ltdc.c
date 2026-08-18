@@ -80,6 +80,57 @@ void MX_LTDC_Init(void)
   }
   /* USER CODE BEGIN LTDC_Init 2 */
 
+  /*---------------------------------------------------------------------------
+   * Layer 2 (UI overlay): ARGB1555, full-screen, per-pixel alpha
+   *   - Alpha=0 (transparent) for background pixels → animation shows through
+   *   - Alpha=1 (opaque) for overlay elements (bottom_bar, clean_text, etc.)
+   *   - Blending: BF1 = PxCA, BF2 = 1-PxCA (hardware per-pixel alpha blending)
+   *---------------------------------------------------------------------------
+   * Buffer address: 0xC0300000 (after the two animation framebuffers)
+   * 800x480 x 2 bytes = 768,000 bytes → fits in remaining SDRAM
+   */
+  {
+    LTDC_LayerCfgTypeDef uiLayerCfg = {0};
+    uiLayerCfg.WindowX0 = 0;
+    uiLayerCfg.WindowX1 = 800;
+    uiLayerCfg.WindowY0 = 0;
+    uiLayerCfg.WindowY1 = 480;
+    uiLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_ARGB1555;
+    uiLayerCfg.Alpha = 255;            /* constant alpha multiplier */
+    uiLayerCfg.Alpha0 = 0;             /* default alpha */
+    /* BF1 = PxCA, BF2 = 1-PxCA: per-pixel alpha blending */
+    uiLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
+    uiLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
+    uiLayerCfg.FBStartAdress = 0xC0300000;
+    uiLayerCfg.ImageWidth = 800;       /* continuous buffer */
+    uiLayerCfg.ImageHeight = 480;
+    uiLayerCfg.Backcolor.Blue = 0;
+    uiLayerCfg.Backcolor.Green = 0;
+    uiLayerCfg.Backcolor.Red = 0;
+    if (HAL_LTDC_ConfigLayer(&hltdc, &uiLayerCfg, 1) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
+
+  /*---------------------------------------------------------------------------
+   * Initialize Layer 2 buffer to all zeros (all pixels transparent)
+   * Use DMA2D R2M to fill the entire 800x480 buffer with 0x0000 (ARGB1555: A=0)
+   *---------------------------------------------------------------------------
+   */
+  {
+    DMA2D_HandleTypeDef hdma2d_local;
+    hdma2d_local.Instance = DMA2D;
+    hdma2d_local.Init.Mode = DMA2D_R2M;
+    hdma2d_local.Init.ColorMode = DMA2D_OUTPUT_RGB565;
+    hdma2d_local.Init.OutputOffset = 0;
+    hdma2d_local.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d_local.Init.RedBlueSwap = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d_local);
+    HAL_DMA2D_Start(&hdma2d_local, 0x00000000, 0xC0300000, 800, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d_local, 10);
+  }
+
   /* USER CODE END LTDC_Init 2 */
 
 }

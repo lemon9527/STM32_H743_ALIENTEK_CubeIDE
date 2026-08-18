@@ -24,6 +24,7 @@
 #include "ltdc.h"
 #include "quadspi.h"
 #include "qspi_flash.h"
+#include "qspi_video.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
@@ -123,6 +124,11 @@ int main(void)
   {
     printf("QSPI_Flash_Init failed\r\n");
   }
+
+  /* QSPI write + mmap moved to animation task */
+
+  /* JPEG decoder not used in Phase 6 (raw RGB565 on QSPI) */
+  /* JPEG_Decoder_Init() removed */
 
   /* Enable BusFault, MemManage, UsageFault exceptions */
   SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_USGFAULTENA_Msk;

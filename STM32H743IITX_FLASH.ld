@@ -80,11 +80,13 @@ SECTIONS
   } >FLASH
 
   /* Constant data goes into FLASH */
+  /* KEEP(*(.rodata.video)) prevents --gc-sections from discarding embedded binary data */
   .rodata :
   {
     . = ALIGN(4);
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
+    KEEP(*(.rodata.video))  /* embedded binary data (bottom_bar, clean_text) */
     . = ALIGN(4);
   } >FLASH
 

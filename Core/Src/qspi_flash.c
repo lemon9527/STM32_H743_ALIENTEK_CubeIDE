@@ -147,3 +147,149 @@ HAL_StatusTypeDef QSPI_Flash_Init(void)
 
   return HAL_OK;
 }
+
+/*---------------------------------------------------------------------------
+ * QSPI_Read: indirect read from QSPI Flash
+ *---------------------------------------------------------------------------
+ * Uses Fast Read (0x0B) command with 4-byte address mode.
+ * Supports single-line instruction, address, and data.
+ */
+HAL_StatusTypeDef QSPI_Read(uint32_t addr, uint8_t *buf, uint32_t len)
+{
+  QSPI_CommandTypeDef sCommand;
+  memset(&sCommand, 0, sizeof(sCommand));
+
+  sCommand.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
+  sCommand.Instruction       = 0x0B;  /* Fast Read */
+  sCommand.AddressMode       = QSPI_ADDRESS_1_LINE;
+  sCommand.AddressSize       = QSPI_ADDRESS_32_BITS;
+  sCommand.Address           = addr;
+  sCommand.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+  sCommand.DataMode          = QSPI_DATA_1_LINE;
+  sCommand.DummyCycles       = 8;
+  sCommand.NbData            = len;
+
+  if (HAL_QSPI_Command(&hqspi, &sCommand, QSPI_CMD_TIMEOUT) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  if (HAL_QSPI_Receive(&hqspi, buf, QSPI_CMD_TIMEOUT) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  return HAL_OK;
+}
+
+/*---------------------------------------------------------------------------
+ * QSPI_WriteEnable: send Write Enable (0x06) command
+ *---------------------------------------------------------------------------
+ */
+static HAL_StatusTypeDef QSPI_WriteEnable(void)
+{
+  QSPI_CommandTypeDef sCommand;
+  memset(&sCommand, 0, sizeof(sCommand));
+
+  sCommand.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  sCommand.Instruction     = 0x06;  /* Write Enable */
+  sCommand.AddressMode     = QSPI_ADDRESS_NONE;
+  sCommand.DataMode        = QSPI_DATA_NONE;
+  sCommand.DummyCycles     = 0;
+
+  return HAL_QSPI_Command(&hqspi, &sCommand, QSPI_CMD_TIMEOUT);
+}
+
+/*---------------------------------------------------------------------------
+ * QSPI_WaitBusy: poll status register until WIP (Write In Progress) clears
+ *---------------------------------------------------------------------------
+ */
+static HAL_StatusTypeDef QSPI_WaitBusy(uint32_t timeout_ms)
+{
+  QSPI_CommandTypeDef sCommand;
+  uint8_t sr;
+  uint32_t tickstart = HAL_GetTick();
+
+  memset(&sCommand, 0, sizeof(sCommand));
+  sCommand.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  sCommand.Instruction     = 0x05;  /* Read Status Register 1 */
+  sCommand.AddressMode     = QSPI_ADDRESS_NONE;
+  sCommand.DataMode        = QSPI_DATA_1_LINE;
+  sCommand.DummyCycles     = 0;
+  sCommand.NbData          = 1;
+
+  do
+  {
+    if (HAL_QSPI_Command(&hqspi, &sCommand, QSPI_CMD_TIMEOUT) != HAL_OK)
+      return HAL_ERROR;
+    if (HAL_QSPI_Receive(&hqspi, &sr, QSPI_CMD_TIMEOUT) != HAL_OK)
+      return HAL_ERROR;
+    if ((sr & 0x01) == 0)  /* WIP bit cleared */
+      return HAL_OK;
+    if ((HAL_GetTick() - tickstart) > timeout_ms)
+      return HAL_TIMEOUT;
+  } while (1);
+}
+
+/*---------------------------------------------------------------------------
+ * QSPI_SectorErase: erase 4KB sector
+ *---------------------------------------------------------------------------
+ */
+HAL_StatusTypeDef QSPI_SectorErase(uint32_t addr)
+{
+  QSPI_CommandTypeDef sCommand;
+
+  if (QSPI_WriteEnable() != HAL_OK)
+    return HAL_ERROR;
+
+  memset(&sCommand, 0, sizeof(sCommand));
+  sCommand.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  sCommand.Instruction     = 0x20;  /* Sector Erase (4KB) */
+  sCommand.AddressMode     = QSPI_ADDRESS_1_LINE;
+  sCommand.AddressSize     = QSPI_ADDRESS_32_BITS;
+  sCommand.Address         = addr;
+  sCommand.DataMode        = QSPI_DATA_NONE;
+  sCommand.DummyCycles     = 0;
+
+  if (HAL_QSPI_Command(&hqspi, &sCommand, QSPI_CMD_TIMEOUT) != HAL_OK)
+    return HAL_ERROR;
+
+  /* Wait for erase to complete (max ~400ms for W25Q256 sector erase) */
+  return QSPI_WaitBusy(500);
+}
+
+/*---------------------------------------------------------------------------
+ * QSPI_Write: page program (max 256 bytes)
+ *---------------------------------------------------------------------------
+ * W25Q256 page size is 256 bytes. Address must be page-aligned if crossing
+ * page boundaries. For now, caller ensures single-page writes.
+ */
+HAL_StatusTypeDef QSPI_Write(uint32_t addr, const uint8_t *buf, uint32_t len)
+{
+  QSPI_CommandTypeDef sCommand;
+
+  if (len > 256)
+    return HAL_ERROR;  /* Max 256 bytes per page */
+
+  if (QSPI_WriteEnable() != HAL_OK)
+    return HAL_ERROR;
+
+  memset(&sCommand, 0, sizeof(sCommand));
+  sCommand.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  sCommand.Instruction     = 0x02;  /* Page Program */
+  sCommand.AddressMode     = QSPI_ADDRESS_1_LINE;
+  sCommand.AddressSize     = QSPI_ADDRESS_32_BITS;
+  sCommand.Address         = addr;
+  sCommand.DataMode        = QSPI_DATA_1_LINE;
+  sCommand.DummyCycles     = 0;
+  sCommand.NbData          = len;
+
+  if (HAL_QSPI_Command(&hqspi, &sCommand, QSPI_CMD_TIMEOUT) != HAL_OK)
+    return HAL_ERROR;
+
+  if (HAL_QSPI_Transmit(&hqspi, (uint8_t *)buf, QSPI_CMD_TIMEOUT) != HAL_OK)
+    return HAL_ERROR;
+
+  /* Wait for program to complete (max ~3ms for W25Q256 page program) */
+  return QSPI_WaitBusy(10);
+}
