@@ -127,7 +127,14 @@ void MX_LTDC_Init(void)
     hdma2d_local.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
     hdma2d_local.Init.RedBlueSwap = DMA2D_RB_REGULAR;
     HAL_DMA2D_Init(&hdma2d_local);
+    /* Clear UI Layer 2 buffer (ARGB1555: all transparent) */
     HAL_DMA2D_Start(&hdma2d_local, 0x00000000, 0xC0300000, 800, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d_local, 10);
+    /* Clear front framebuffer (Layer 1, RGB565: all black) */
+    HAL_DMA2D_Start(&hdma2d_local, 0x00000000, 0xC0000000, 1600, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d_local, 10);
+    /* Clear back framebuffer (Layer 1, RGB565: all black) */
+    HAL_DMA2D_Start(&hdma2d_local, 0x00000000, 0xC0180000, 1600, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d_local, 10);
   }
 

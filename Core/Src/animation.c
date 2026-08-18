@@ -399,6 +399,13 @@ void StartAnimationTask(void *argument)
     HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_BACK, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 10);
 
+    /* Pre-render static overlays (bottom_bar, clean_text, rectangle, title text)
+     * to LTDC Layer 2 UI buffer immediately after clearing the framebuffers.
+     * This ensures UI elements are visible from the very first frame, before
+     * any potentially slow QSPI initialization.
+     */
+    PreRenderUI();
+
     /* Write header + frame table to QSPI Flash (first boot only, uses direct QSPI commands) */
     if (QSPI_Video_WriteToFlash() != HAL_OK)
     {
@@ -440,11 +447,6 @@ void StartAnimationTask(void *argument)
 
     printf("Animation Phase 6: Raw RGB565 QSPI, %lu frames, %dx%d at %dfps\r\n",
            num_frames, ANIM_FRAME_WIDTH, ANIM_FRAME_HEIGHT, ANIM_FPS);
-
-    /* Pre-render static overlays (bottom_bar, clean_text) to LTDC Layer 2 UI buffer
-     * This is done once at startup. Layer 2 blends hardware over Layer 1 animation.
-     */
-    PreRenderUI();
 
     for (;;)
     {
