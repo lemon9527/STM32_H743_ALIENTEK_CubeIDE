@@ -60,6 +60,12 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin : KEY2_Pin */
+  GPIO_InitStruct.Pin = KEY2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(KEY2_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : WK_UP_Pin */
   GPIO_InitStruct.Pin = WK_UP_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -78,12 +84,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : KEY2_Pin */
-  GPIO_InitStruct.Pin = KEY2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(KEY2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LCD_BL_Pin */
   GPIO_InitStruct.Pin = LCD_BL_Pin;

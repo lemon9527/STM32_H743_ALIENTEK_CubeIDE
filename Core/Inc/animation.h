@@ -86,6 +86,14 @@ extern const uint8_t _binary_clean_text_rgb_raw_end[];
 extern const uint8_t _binary_clean_text_alpha_raw_start[];
 extern const uint8_t _binary_clean_text_alpha_raw_end[];
 
+/* Page state enumeration */
+typedef enum {
+    PAGE_ANIMATION = 0,
+    PAGE_LVGL      = 1,
+} PageState_t;
+
+extern volatile PageState_t current_page;
+
 void AnimTimerCallback(void *argument);
 void StartAnimationTask(void *argument);
 

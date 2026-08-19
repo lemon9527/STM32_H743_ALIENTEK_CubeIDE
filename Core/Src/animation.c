@@ -15,6 +15,7 @@
 #include "qspi_video.h"
 #include "qspi_flash.h"
 #include "dma2d.h"
+#include "gpio.h"
 #include "cmsis_os2.h"
 #include <stdio.h>
 #include <string.h>
@@ -45,6 +46,13 @@ extern LTDC_HandleTypeDef hltdc;
 #define FB_BACK        0xC0180000U
 
 static uint32_t fb_active = FB_FRONT;
+
+/* Current page state (default: animation page) */
+volatile PageState_t current_page = PAGE_ANIMATION;
+
+/* Previous button states for falling-edge detection (1 = released, active low) */
+static uint8_t prev_key0 = 1;
+static uint8_t prev_key2 = 1;
 
 /*---------------------------------------------------------------------------
  * Swap LTDC layer to a new framebuffer address (immediate)
@@ -107,6 +115,32 @@ static const uint8_t digit_font[10][16] = {
 static inline uint16_t rgb565_to_argb1555(uint16_t rgb565)
 {
     return 0x8000 | ((rgb565 & 0xF800) >> 1) | ((rgb565 & 0x07C0) >> 1) | (rgb565 & 0x001F);
+}
+
+/*---------------------------------------------------------------------------
+ * Clear LTDC Layer 2 UI buffer to transparent (ARGB1555=0x0000)
+ *---------------------------------------------------------------------------
+ */
+static void ClearLayer2_Transparent(void)
+{
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+    for (uint32_t i = 0; i < 800 * 480; i++)
+    {
+        ui_buf[i] = 0x0000;
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Clear LTDC Layer 2 UI buffer to opaque black (ARGB1555=0x8000)
+ *---------------------------------------------------------------------------
+ */
+static void ClearLayer2_OpaqueBlack(void)
+{
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+    for (uint32_t i = 0; i < 800 * 480; i++)
+    {
+        ui_buf[i] = 0x8000;
+    }
 }
 
 /*---------------------------------------------------------------------------
@@ -319,6 +353,45 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
 }
 
 /*---------------------------------------------------------------------------
+ * Switch to LVGL page: clear Layer 2 to opaque black, draw "LVGL Study"
+ *---------------------------------------------------------------------------
+ */
+static void SwitchToLVGLPage(void)
+{
+    /* Clear Layer 2 to opaque black */
+    ClearLayer2_OpaqueBlack();
+
+    /* Clear Layer 1 animation buffers to black */
+    LCD_Clear(LCD_COLOR_BLACK);
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_BACK, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 10);
+
+    /* Draw "LVGL Study" centered on screen */
+    DrawTextLineCenter(400, "LVGL Study", 0xFFFF);
+
+    printf("PAGE: switched to LVGL Study\r\n");
+}
+
+/*---------------------------------------------------------------------------
+ * Switch back to animation page: restore UI overlays on Layer 2
+ *---------------------------------------------------------------------------
+ */
+static void SwitchToAnimationPage(void)
+{
+    /* Clear Layer 2 to transparent, then re-render all overlays */
+    ClearLayer2_Transparent();
+    PreRenderUI();
+
+    printf("PAGE: switched to Animation\r\n");
+}
+
+/*---------------------------------------------------------------------------
  * Draw frame number on LTDC Layer 2 UI buffer (ARGB1555)
  * Called every frame. White text on transparent background.
  * Uses UI_BUF_STRIDE (800) instead of LCD_FB_STRIDE (1600).
@@ -452,6 +525,51 @@ void StartAnimationTask(void *argument)
     {
         /* Wait for 50ms timer to signal next frame */
         osSemaphoreAcquire(anim_sem_id, osWaitForever);
+
+        /*---------------------------------------------------------------------------
+         * Poll KEY0 and KEY2 for page switching (50ms debounce, falling edge)
+         * KEY0 = PH3, KEY2 = PC12, both active low
+         *---------------------------------------------------------------------------
+         */
+        {
+            uint8_t key0 = (HAL_GPIO_ReadPin(KEY0_GPIO_Port, KEY0_Pin) == GPIO_PIN_RESET) ? 0 : 1;
+            uint8_t key2 = (HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin) == GPIO_PIN_RESET) ? 0 : 1;
+
+            /* Debug: log key state changes to help diagnose unresponsive KEY2 */
+            if (key0 != prev_key0 || key2 != prev_key2)
+            {
+                printf("DEBUG_KEYS: key0=%d key2=%d\r\n", key0, key2);
+            }
+
+            /* KEY0 falling edge: switch to LVGL page */
+            if (prev_key0 == 1 && key0 == 0)
+            {
+                if (current_page == PAGE_ANIMATION)
+                {
+                    SwitchToLVGLPage();
+                    current_page = PAGE_LVGL;
+                }
+            }
+
+            /* KEY2 falling edge: switch to Animation page */
+            if (prev_key2 == 1 && key2 == 0)
+            {
+                if (current_page == PAGE_LVGL)
+                {
+                    current_page = PAGE_ANIMATION;
+                    SwitchToAnimationPage();
+                }
+            }
+
+            prev_key0 = key0;
+            prev_key2 = key2;
+        }
+
+        /* Skip rendering when in LVGL page (keep polling buttons) */
+        if (current_page == PAGE_LVGL)
+        {
+            continue;
+        }
 
         uint32_t t0 = DWT->CYCCNT;
 

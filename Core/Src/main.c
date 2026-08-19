@@ -23,16 +23,14 @@
 #include "dma2d.h"
 #include "ltdc.h"
 #include "quadspi.h"
-#include "qspi_flash.h"
-#include "qspi_video.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
-#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "qspi_flash.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

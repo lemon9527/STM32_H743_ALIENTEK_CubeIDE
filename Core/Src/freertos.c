@@ -52,19 +52,17 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 static osTimerId_t anim_timer_id;
+osThreadId_t animTaskHandle;
+const osThreadAttr_t animTask_attributes = {
+  .name = "animation",
+  .stack_size = 1024 * 8,
+  .priority = (osPriority_t) osPriorityHigh,
+};
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-
-/* Definitions for animation task */
-osThreadId_t animTaskHandle;
-const osThreadAttr_t animTask_attributes = {
-  .name = "animTask",
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };

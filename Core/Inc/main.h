@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define KEY2_Pin GPIO_PIN_13
+#define KEY2_GPIO_Port GPIOC
 #define FMC_A0_Pin GPIO_PIN_0
 #define FMC_A0_GPIO_Port GPIOF
 #define FMC_A1_Pin GPIO_PIN_1
@@ -141,8 +143,6 @@ void Error_Handler(void);
 #define FMC_BA1_GPIO_Port GPIOG
 #define FMC_SDCLK_Pin GPIO_PIN_8
 #define FMC_SDCLK_GPIO_Port GPIOG
-#define KEY2_Pin GPIO_PIN_12
-#define KEY2_GPIO_Port GPIOC
 #define FMC_D2_Pin GPIO_PIN_0
 #define FMC_D2_GPIO_Port GPIOD
 #define FMC_D3_Pin GPIO_PIN_1
