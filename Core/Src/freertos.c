@@ -31,6 +31,7 @@
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
+#include "lv_demo.h"
 #include "animation.h"
 /* USER CODE END Includes */
 
@@ -52,11 +53,12 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 static osTimerId_t anim_timer_id;
+static osTimerId_t lv_tick_timer_id;
 osThreadId_t animTaskHandle;
 const osThreadAttr_t animTask_attributes = {
   .name = "animation",
   .stack_size = 1024 * 8,
-  .priority = (osPriority_t) osPriorityHigh,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -71,6 +73,7 @@ const osThreadAttr_t defaultTask_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 void StartAnimationTask(void *argument);
 void AnimTimerCallback(void *argument);
+void LVTickCallback(void *argument);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -99,6 +102,9 @@ void MX_FREERTOS_Init(void) {
   /* start timers, add new ones, ... */
   anim_timer_id = osTimerNew(AnimTimerCallback, osTimerPeriodic, NULL, NULL);
   osTimerStart(anim_timer_id, 50U);  /* 50ms period for 20fps animation */
+  /* 1ms LVGL tick timer */
+  lv_tick_timer_id = osTimerNew(LVTickCallback, osTimerPeriodic, NULL, NULL);
+  osTimerStart(lv_tick_timer_id, 1U);  /* 1ms lv_tick_inc(1) */
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -185,17 +191,29 @@ void StartDefaultTask(void *argument)
   /* Turn on LCD backlight (LVGL will manage the display) */
   LCD_Init();
 
-  /* Infinite loop - LED blink only, LVGL manages the display */
+  /* Initialize LVGL and its ports */
+  lv_init();
+  lv_port_disp_init();
+  lv_port_indev_init();
+
+  /* Infinite loop - LED blink + LVGL task handling */
   for(;;)
   {
-    /* LED blink: toggle every 500ms (10 ticks * 50ms) */
+    /* LED blink: toggle every 500ms (100 ticks * 5ms) */
     led_tick++;
-    if (led_tick >= 10)
+    if (led_tick >= 100)
     {
       HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
       led_tick = 0;
     }
-    osDelay(50);
+
+    /* LVGL task handler: call frequently (5ms) when LVGL is active */
+    if (lv_is_initialized() && current_page == PAGE_LVGL)
+    {
+      lv_task_handler();
+    }
+
+    osDelay(5);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -204,4 +222,13 @@ void StartDefaultTask(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
+
+/* USER CODE BEGIN 1 */
+void LVTickCallback(void *argument)
+{
+  (void)argument;
+  lv_tick_inc(1);
+}
+
+/* USER CODE END 1 */
 

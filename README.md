@@ -33,99 +33,99 @@ HSE (25MHz)
 ## 内存布局
 
 STM32H743IIT6 片上内存：
+## 构建与烧录
 
-| 区域 | 大小 | 起始地址 | 用途 |
-|------|------|----------|------|
-| ITCMRAM | 64KB | 0x00000000 | 指令紧耦合内存 |
-| FLASH | 2048KB | 0x08000000 | 程序存储 |
-| DTCMRAM | 128KB | 0x20000000 | 数据紧耦合内存 |
-| RAM_D1 | 512KB | 0x24000000 | 域1 SRAM (data/bss/heap/stack) |
-| RAM_D2 | 288KB | 0x30000000 | 域2 SRAM |
-| RAM_D3 | 64KB | 0x38000000 | 域3 SRAM |
+下面将“构建（build）”和“烧录（flash/program）”区分开，方便理解与使用。
 
-当前链接脚本使用 RAM_D1 作为数据段、BSS 段、堆和栈的存放位置。
+### 方式一（构建）：STM32CubeIDE（Build）
+1. 使用 STM32CubeIDE 打开项目目录
+2. 编译：`Project → Build All`（会在 `Debug/` 目录生成 ELF/HEX）
 
-## 项目结构
+### 在 VS Code（集成终端）构建
+你也可以在 VS Code 里直接构建（集成终端或任务），推荐两种方式：
 
+- 通过集成终端（临时 PATH）：
+  1. 打开 VS Code → Terminal → New Terminal
+  2. 在终端里导出 CubeIDE 自带工具链到 `PATH`：
+     ```bash
+     export PATH="/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/bin:$PATH"
+     ```
+  3. 运行构建命令：
+     ```bash
+     make -C Debug all
+     ```
+
+- 通过 VS Code 任务（推荐，已在本仓库配置）
+  1. 打开 Command Palette → `Tasks: Run Task` → 选择 `Build (Debug)`，或直接按 `Cmd+Shift+B`（macOS）/`Ctrl+Shift+B`（Windows/Linux）。
+  2. 任务会自动把 CubeIDE 工具链路径加入 `PATH` 并运行 `make -C Debug all`，构建输出在终端中显示。
+
+> 注：我已在 `.vscode/tasks.json` 和 `.vscode/settings.json` 中加入了示例配置（集成终端 PATH 与构建任务）。如果你的 CubeIDE 版本或路径不同，请调整 `.vscode/tasks.json` 中的 `PATH` 字段。
+
+---
+
+### 烧录（Flash / Program）方式
+
+下面几个方式用于将生成的固件写入目标板（均以 `Debug/STM32_H743_ALIENTEK_CubeIDE.hex` 或 `.elf` 为例）。
+
+### 方式二：STM32CubeProgrammer (ST-LINK, macOS)
+1. 编译生成 hex 文件（CubeIDE 或 VS Code 会把文件生成到 `Debug/` 目录）
+2. 开发板 ST-LINK 口连接到 Mac (USB)
+3. 打开 CubeProgrammer，选择 ST-LINK 连接
+4. 点击 **Open file** 选择 `Debug/STM32_H743_ALIENTEK_CubeIDE.hex`
+5. 点击 **Download** 烧录
+
+### 方式三：stm32flash 串口烧录 (macOS)
+1. 编译生成 hex 文件（CubeIDE / VS Code）
+2. 开发板 USB-232 口连接到 Mac
+3. BOOT0 跳线帽接 **3.3V**，按 RESET 进入 ISP 模式
+4. 执行烧录：
+   ```bash
+   stm32flash -w Debug/STM32_H743_ALIENTEK_CubeIDE.hex -v -g 0 -b 115200 /dev/tty.usbserial-2110
+   ```
+5. 烧录完成后 BOOT0 接回 GND，程序自动运行
+
+### 方式四：pyOCD（CMSIS-DAP，交互式 `load`）
+
+1. 列出可用探针：
+
+  ```bash
+  pyocd list
+  ```
+
+2. 使用交互式 commander 连接（指定 target 和 probe 的 Unique ID）：
+
+  ```bash
+  pyocd commander -t stm32h743xx -u 07000001000000000000000000000000a5a5a5a597969908
+  ```
+
+3. 在 `pyocd>` 提示符下使用 `load` 写入 HEX/ELF：
+
+  ```text
+  pyocd> load Debug/STM32_H743_ALIENTEK_CubeIDE.hex
+  ```
+
+4. 常用交互命令：`reset`、`resume`、`halt`、`read32` 等。
+
+注意事项：
+- `pyocd list` 中显示的板卡名称（例如 `NUCLEO-F103RB`）是探针/适配器的标识，不一定等同当前目标 MCU 描述。
+- 在非交互模式下尝试 `pyocd flash -t ... -u <UID> <file>` 时可能因为 pyOCD 版本、参数或与探针/目标的通信问题而失败；遇到此类错误时可优先使用 `commander` + `load`。
+- 如果在连接时看到 `Invalid coresight component`、`Memory transfer fault` 或 `Connected to STM32H743xx [Lockup]` 等警告/错误，尝试：
+  - 确认目标供电、复位线以及 SWD 连接正确；
+  - 给目标上电重置或断电重连；
+  - 尝试短按 Reset，或通过 `halt`/`reset` 在 `pyocd>` 中清除锁死；
+  - 必要时使用 OpenOCD（参见本仓库的 `OpenOCD` 任务）作为替代烧录方式。
+
+不同 pyOCD 版本支持的命令略有差异；若命令不可识别，请用 `pyocd --version` 和 `pyocd --help` 检查可用子命令。
+
+示例（交互式流程复制粘贴）：
+
+```bash
+pyocd list
+pyocd commander -t stm32h743xx -u 07000001000000000000000000000000a5a5a5a597969908
+# 在 pyocd> 提示符下：
+# load Debug/STM32_H743_ALIENTEK_CubeIDE.hex
+# reset
 ```
-STM32_H743_ALIENTEK_CubeIDE/
-├── Core/
-│   ├── Inc/                        # 头文件
-│   │   ├── main.h                  # 主头文件
-│   │   ├── gpio.h                  # GPIO 配置
-│   │   ├── usart.h                 # USART 配置
-│   │   ├── lcd.h                   # LCD 驱动接口
-│   │   ├── animation.h             # 动画引擎接口
-│   │   ├── lv_port_disp.h          # LVGL 显示驱动接口
-│   │   ├── lv_port_indev.h         # LVGL 输入驱动接口
-│   │   ├── qspi_flash.h            # QSPI Flash 芯片操作接口
-│   │   ├── qspi_video.h            # QSPI 视频帧读取接口
-│   │   ├── jpeg_decoder.h          # 硬件 JPEG 解码接口
-│   │   ├── stm32h7xx_hal_conf.h    # HAL 配置
-│   │   └── stm32h7xx_it.h          # 中断服务声明
-│   ├── Src/
-│   │   ├── main.c                  # 主程序
-│   │   ├── gpio.c                  # GPIO 初始化
-│   │   ├── usart.c                 # USART 初始化
-│   │   ├── fmc.c                   # FMC SDRAM 初始化
-│   │   ├── ltdc.c                  # LTDC 初始化
-│   │   ├── dma2d.c                 # DMA2D 初始化
-│   │   ├── lcd.c                   # LCD 驱动 (DMA2D 加速)
-│   │   ├── animation.c             # 320x320 动画引擎 (raw RGB565, LTDC双Layer)
-│   │   ├── qspi_flash.c            # QSPI Flash 芯片操作 (读写)
-│   │   ├── qspi_video.c            # QSPI 视频帧读取 (Memory-Mapped)
-│   │   ├── jpeg_decoder.c          # 硬件 JPEG 解码 (YCbCr→RGB565)
-│   │   ├── lv_port_disp.c          # LVGL 显示驱动 (DMA2D flush)
-│   │   ├── lv_port_indev.c         # LVGL 输入驱动 (KEY0)
-│   │   ├── freertos.c              # FreeRTOS 任务
-│   │   ├── stm32h7xx_hal_msp.c     # HAL MSP 配置
-│   │   ├── stm32h7xx_hal_timebase_tim.c  # TIM7 时基
-│   │   ├── stm32h7xx_it.c          # 中断服务实现
-│   │   ├── system_stm32h7xx.c      # 系统初始化
-│   │   ├── syscalls.c              # 系统调用 (printf 重定向)
-│   │   └── sysmem.c                # 内存管理
-│   ├── O2/                          # -O2 优化编译
-│   │   └── ycbcr_conv.c            # YCbCr→RGB565 MCU 转换
-│   └── Startup/                    # 启动文件
-├── Drivers/
-│   ├── STM32H7xx_HAL_Driver/       # HAL 驱动库
-│   └── CMSIS/                      # CMSIS 核心
-├── Middlewares/
-│   ├── Third_Party/
-│   │   ├── FreeRTOS/               # FreeRTOS 内核
-│   │   └── LVGL/                   # LVGL v8.4 图形库 (待集成)
-├── STM32_H743_ALIENTEK_CubeIDE.ioc # CubeMX 项目配置
-├── STM32H743IITX_FLASH.ld          # FLASH 链接脚本
-├── STM32H743IITX_RAM.ld            # RAM 调试链接脚本
-├── scripts/
-│   ├── export_frames.py            # MP4→RGB565 帧导出工具
-│   └── program_frames.py           # 帧数据 UART 烧录到 QSPI Flash
-└── README.md
-```
-
-## 初始化流程
-
-```
-main()
-  ├── MPU_Config()            # MPU 配置 (背景区域 4GB + SDRAM 32MB)
-  ├── SCB_EnableICache()      # 使能 I-Cache
-  ├── SCB_EnableDCache()      # 使能 D-Cache
-  ├── HAL_Init()              # HAL 库初始化
-  ├── SystemClock_Config()    # 系统时钟配置 (400MHz)
-  ├── MX_GPIO_Init()          # GPIO 初始化 (PB0, PB1, PB5)
-  ├── MX_USART1_UART_Init()   # 调试串口初始化 (PA9, PA10)
-  ├── MX_FMC_Init()           # FMC / SDRAM 初始化 (W9825G6KH)
-  ├── MX_DMA2D_Init()         # DMA2D 初始化
-  ├── MX_LTDC_Init()          # LTDC 初始化 (双 Layer: 动画 + UI)
-  ├── MX_QUADSPI_Init()       # QSPI 初始化 (W25Q256, 32MB)
-  ├── osKernelInitialize()    # FreeRTOS 内核初始化
-  ├── MX_FREERTOS_Init()      # 创建 defaultTask + animTask 线程
-  └── osKernelStart()         # 启动调度器
-       ├── StartDefaultTask()  # 打印时钟 → SDRAM 测试 → LED 闪烁
-       └── StartAnimationTask() # 清屏 → QSPI Flash 编程/验证 → 循环播放动画
-```
-
-## printf 重定向
 
 通过实现 `__io_putchar()` 将 printf 输出重定向到 USART1 (115200-8-N-1)：
 

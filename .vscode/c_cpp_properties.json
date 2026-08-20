@@ -1,0 +1,56 @@
+{
+  "configurations": [
+    {
+      "name": "STM32 (macOS)",
+      "compilerPath": "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/bin/arm-none-eabi-gcc",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm",
+      "compileCommands": "${workspaceFolder}/compile_commands.json",
+      "includePath": [
+        "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/arm-none-eabi/include",
+        "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/lib/gcc/arm-none-eabi/14.3.1/include",
+        "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/lib/gcc/arm-none-eabi/14.3.1/include-fixed",
+        "${workspaceFolder}/Core/Inc",
+        "${workspaceFolder}/Core/Inc/..",
+        "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc",
+        "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+        "${workspaceFolder}/Drivers/CMSIS/Include",
+        "${workspaceFolder}/Drivers/CMSIS/RTOS2/Include",
+        "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/include",
+        "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2",
+        "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+        "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/portable/Common",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/demos",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/src",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/src/hal",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/src/font",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/src/widgets",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/demos/widgets",
+        "${workspaceFolder}/Middlewares/Third_Party/LVGL/src/draw/stm32_dma2d",
+        "${workspaceFolder}/Debug",
+        "${workspaceFolder}"
+      ],
+      "defines": [
+        "STM32H743xx",
+        "USE_HAL_DRIVER",
+        "DEBUG"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}/Core/Inc",
+          "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc",
+          "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+          "${workspaceFolder}/Drivers/CMSIS/Include",
+          "${workspaceFolder}/Middlewares/Third_Party/LVGL",
+          "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  ],
+  "mergeConfigurations": true,
+  "version": 4
+}

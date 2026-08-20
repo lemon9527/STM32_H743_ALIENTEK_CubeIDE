@@ -1,0 +1,47 @@
+[
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/freertos.c -o Core/Src/freertos.o",
+		"file": "Core/Src/freertos.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/animation.c -o Core/Src/animation.o",
+		"file": "Core/Src/animation.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/lv_demo.c -o Core/Src/lv_demo.o",
+		"file": "Core/Src/lv_demo.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/lv_port_disp.c -o Core/Src/lv_port_disp.o",
+		"file": "Core/Src/lv_port_disp.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/lv_port_indev.c -o Core/Src/lv_port_indev.o",
+		"file": "Core/Src/lv_port_indev.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/lcd.c -o Core/Src/lcd.o",
+		"file": "Core/Src/lcd.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/dma2d.c -o Core/Src/dma2d.o",
+		"file": "Core/Src/dma2d.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/main.c -o Core/Src/main.o",
+		"file": "Core/Src/main.c"
+	},
+	{
+		"directory": "/Users/lemonliu/IOT/STM32_H743_ALIENTEK_CubeIDE",
+		"command": "/Library/Developer/CommandLineTools/usr/bin/clang -ICore/Inc -IDrivers/STM32H7xx_HAL_Driver/Inc -IDrivers/CMSIS/Device/ST/STM32H7xx/Include -IDrivers/CMSIS/Include -IDrivers/CMSIS/RTOS2/Include -IMiddlewares/Third_Party/FreeRTOS/Source/include -IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -IMiddlewares/Third_Party/FreeRTOS/Source/portable/Common -IMiddlewares/Third_Party/LVGL -IMiddlewares/Third_Party/LVGL/src -IMiddlewares/Third_Party/LVGL/src/hal -IMiddlewares/Third_Party/LVGL/src/font -IMiddlewares/Third_Party/LVGL/src/widgets -IMiddlewares/Third_Party/LVGL/demos -IDebug -I. -DSTM32H743xx -DUSE_HAL_DRIVER -DDEBUG -std=gnu11 -c Core/Src/quadspi.c -o Core/Src/quadspi.o",
+		"file": "Core/Src/quadspi.c"
+	}
+]

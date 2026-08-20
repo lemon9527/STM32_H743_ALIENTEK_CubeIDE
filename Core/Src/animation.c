@@ -19,6 +19,7 @@
 #include "cmsis_os2.h"
 #include <stdio.h>
 #include <string.h>
+#include "stm32h7xx.h"
 
 /* Number of frames (read from QSPI Flash at init) */
 static uint32_t num_frames = 0;
@@ -53,6 +54,9 @@ volatile PageState_t current_page = PAGE_ANIMATION;
 /* Previous button states for falling-edge detection (1 = released, active low) */
 static uint8_t prev_key0 = 1;
 static uint8_t prev_key2 = 1;
+
+/* Flag to prevent lvgl_demo_create() from being called multiple times */
+static uint8_t lvgl_demo_created = 0;
 
 /*---------------------------------------------------------------------------
  * Swap LTDC layer to a new framebuffer address (immediate)
@@ -128,6 +132,12 @@ static void ClearLayer2_Transparent(void)
     {
         ui_buf[i] = 0x0000;
     }
+    /* Clean D-Cache so LTDC reads the cleared (transparent) data from SDRAM.
+     * Without this, LTDC sees stale SDRAM content from the previous page,
+     * which can cause a black background when stale opaque pixels block
+     * the white animation layer.
+     */
+    SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
 }
 
 /*---------------------------------------------------------------------------
@@ -242,6 +252,8 @@ static void PreRenderUI(void)
 LV_FONT_DECLARE(lv_font_montserrat_24);
 #define LV_FONT (&lv_font_montserrat_24)
 
+#include "lv_demo.h"
+
 #define FN_X         4
 #define FN_Y         4
 
@@ -353,29 +365,74 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
 }
 
 /*---------------------------------------------------------------------------
- * Switch to LVGL page: clear Layer 2 to opaque black, draw "LVGL Study"
- *---------------------------------------------------------------------------
+ * Switch to LVGL page: restore a clean background and make Layer 2
+ * transparent so LVGL can render its widgets (no pre-drawn overlay).
+ *--------------------------------------------------------------------------
  */
 static void SwitchToLVGLPage(void)
 {
-    /* Clear Layer 2 to opaque black */
-    ClearLayer2_OpaqueBlack();
-
-    /* Clear Layer 1 animation buffers to black */
-    LCD_Clear(LCD_COLOR_BLACK);
+    /* Make Layer 2 transparent so LVGL rendering is visible and not
+     * occluded by pre-drawn opaque pixels.
+     */
+    ClearLayer2_Transparent();
+    /* Fill both animation framebuffers with opaque white so the transparent
+     * Layer2 appears over a white background while LVGL is active. This
+     * prevents a black background when animation buffers were previously
+     * cleared to black. Fill BOTH buffers, because regardless of which one
+     * is active (fb_active), we need a clean white background when switching.
+     *
+     * Call HAL_DMA2D_Abort() before starting to ensure DMA2D is in READY
+     * state even if a previous transfer was interrupted. Without this,
+     * DMA2D can get stuck in a BUSY state and the fill operation is skipped,
+     * leaving stale animation pixels in the framebuffer (black/dirty background).
+     */
+    /* Use DMA2D R2M to fill back buffer */
     hdma2d.Init.Mode         = DMA2D_R2M;
     hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
     hdma2d.Init.OutputOffset = 0;
     hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
     hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
     HAL_DMA2D_Init(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_BACK, LCD_FB_STRIDE, 480);
-    HAL_DMA2D_PollForTransfer(&hdma2d, 10);
 
-    /* Draw "LVGL Study" centered on screen */
-    DrawTextLineCenter(400, "LVGL Study", 0xFFFF);
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, 0xFFFFFFFF, FB_BACK, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_BACK, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
-    printf("PAGE: switched to LVGL Study\r\n");
+    /* Fill front buffer using DMA2D R2M */
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, 0xFFFFFFFF, FB_FRONT, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_FRONT, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    /* Ensure LTDC shows the white front buffer, reset fb_active to known state */
+    LTDC_Layer1->CFBAR = FB_FRONT;
+    fb_active = FB_FRONT;
+
+    /* Ensure LVGL demo widgets are created only once (avoid duplicate labels
+     * on repeated switches). The lv_refr_now(NULL) call forces an immediate
+     * flush so Layer 2 shows the LVGL content before the next animation tick.
+     *
+     * On subsequent switches, invalidate the entire active screen before
+     * lv_refr_now(NULL) so that LVGL re-renders all existing widgets even
+     * when no new widgets are created. Without this, lv_refr_now(NULL) may
+     * skip the flush callback because no dirty areas exist, resulting in a
+     * blank white screen (no text visible).
+     */
+    if (lv_is_initialized()) {
+        if (!lvgl_demo_created) {
+            lvgl_demo_create();
+            lvgl_demo_created = 1;
+        }
+        /* Invalidate the entire screen to force a full re-render */
+        lv_obj_invalidate(lv_scr_act());
+        /* Force an immediate LVGL refresh so flush_cb writes at least once
+         * before animation resumes. This helps avoid transient black frames.
+         */
+        lv_refr_now(NULL);
+    }
+
+    printf("PAGE: switched to LVGL\r\n");
 }
 
 /*---------------------------------------------------------------------------
@@ -384,11 +441,42 @@ static void SwitchToLVGLPage(void)
  */
 static void SwitchToAnimationPage(void)
 {
-    /* Clear Layer 2 to transparent, then re-render all overlays */
+    /* STEP 1: Fill both animation framebuffers to black FIRST.
+     * This ensures the background is already black before any UI elements
+     * appear on Layer 2. Doing this after PreRenderUI causes a visible
+     * flicker: white background + UI elements → background turns black.
+     */
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+
+    /* Clear back buffer via DMA2D R2M */
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_BACK, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_BACK, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    /* Clear front buffer via DMA2D R2M */
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_FRONT, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_FRONT, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    /* Ensure LTDC uses the front buffer and update tracking variable */
+    LTDC_Layer1->CFBAR = FB_FRONT;
+    fb_active = FB_FRONT;
+
+    /* STEP 2: Now clear Layer 2 to transparent and re-render UI overlays.
+     * The background is already black, so UI elements will appear on a
+     * dark background with no flicker.
+     */
     ClearLayer2_Transparent();
     PreRenderUI();
 
-    printf("PAGE: switched to Animation\r\n");
+    printf("PAGE: switched to Animation (buffers cleared)\r\n");
 }
 
 /*---------------------------------------------------------------------------
@@ -471,6 +559,8 @@ void StartAnimationTask(void *argument)
     HAL_DMA2D_Init(&hdma2d);
     HAL_DMA2D_Start(&hdma2d, 0x00000000, FB_BACK, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 10);
+    /* Clean D-cache for the cleared back buffer */
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_BACK, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
     /* Pre-render static overlays (bottom_bar, clean_text, rectangle, title text)
      * to LTDC Layer 2 UI buffer immediately after clearing the framebuffers.
@@ -588,6 +678,8 @@ void StartAnimationTask(void *argument)
 
         /* CPU rotate + copy animation frame (CopyFrame adds ANIM_DST_X/Y internally) */
         CopyFrame((const uint16_t *)src_addr, (uint16_t *)fb_dst);
+        /* Clean D-cache for the destination framebuffer so LTDC reads updated data */
+        SCB_CleanDCache_by_Addr((uint32_t *)fb_dst, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
         uint32_t t2 = DWT->CYCCNT;
 
         /* Draw frame number on LTDC Layer 2 UI buffer (ARGB1555, transparent bg) */

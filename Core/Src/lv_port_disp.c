@@ -12,9 +12,16 @@
 #include "lv_port_disp.h"
 #include "lcd.h"
 #include "dma2d.h"
+#include "stm32h7xx.h"
 
 /* DMA2D handle (initialized by CubeMX in dma2d.c) */
 extern DMA2D_HandleTypeDef hdma2d;
+
+/* Helper: convert RGB565 -> ARGB1555 (alpha=1 opaque) */
+static inline uint16_t rgb565_to_argb1555_local(uint16_t rgb565)
+{
+    return (uint16_t)(0x8000u | ((rgb565 & 0xF800u) >> 1) | ((rgb565 & 0x07C0u) >> 1) | (rgb565 & 0x001Fu));
+}
 
 /*---------------------------------------------------------------------------
  * LVGL Display Buffers (double buffering in SDRAM)
@@ -49,15 +56,43 @@ static void lv_port_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area,
     uint32_t log_w = (uint32_t)(area->x2 - area->x1 + 1);
     uint32_t log_h = (uint32_t)(area->y2 - area->y1 + 1);
 
-    uint16_t *dst = (uint16_t *)LCD_FB_BASE;
     uint16_t *src = (uint16_t *)color_p;
+
+    /* Write LVGL output into Layer 2 UI buffer (ARGB1555) at UI_BUF_ADDR.
+     * We convert RGB565 (LVGL render) -> ARGB1555 (Layer2 format) and
+     * perform the same 90deg CCW rotation mapping used elsewhere.
+     */
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+
+    /* conversion uses file-scope helper rgb565_to_argb1555_local() */
 
     for (uint32_t ly = 0; ly < log_h; ly++) {
         uint32_t phys_x = (uint32_t)(area->y1 + ly);
         for (uint32_t lx = 0; lx < log_w; lx++) {
             uint32_t phys_y = (uint32_t)(479 - (area->x1 + lx));
-            dst[phys_y * LCD_FB_STRIDE + phys_x] = src[ly * log_w + lx];
+            uint16_t pixel_rgb565 = src[ly * log_w + lx];
+            uint16_t pixel_argb1555 = rgb565_to_argb1555_local(pixel_rgb565);
+            ui_buf[phys_y * UI_BUF_STRIDE + phys_x] = pixel_argb1555;
         }
+    }
+
+    /* Clean D-Cache for the physical region we just wrote so LTDC/DMA
+     * reads the updated pixels. Compute physical rectangle bounds.
+     */
+    uint32_t phys_x_min = (uint32_t)area->y1;
+    uint32_t phys_x_max = (uint32_t)area->y2;
+    uint32_t phys_y_min = (uint32_t)(479 - area->x2);
+    uint32_t phys_y_max = (uint32_t)(479 - area->x1);
+
+    uint32_t phys_w = phys_x_max - phys_x_min + 1; /* pixels per row written */
+    /* Clean each written row individually to avoid touching unrelated memory */
+    for (uint32_t py = phys_y_min; py <= phys_y_max; py++) {
+        uint32_t *addr = (uint32_t *)&ui_buf[py * UI_BUF_STRIDE + phys_x_min];
+        uint32_t size_bytes = phys_w * sizeof(uint16_t);
+        /* Align address down to 32-byte boundary and size up */
+        uint32_t start = ((uint32_t)addr) & ~0x1FU;
+        uint32_t end = (((uint32_t)addr + size_bytes + 31) & ~0x1FU);
+        SCB_CleanDCache_by_Addr((uint32_t *)start, end - start);
     }
 
     lv_disp_flush_ready(disp_drv);
