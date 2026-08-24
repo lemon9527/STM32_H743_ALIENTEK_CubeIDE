@@ -1,5 +1,6 @@
 #include "lcd.h"
 #include "dma2d.h"
+#include "tim.h"
 #include <string.h>
 
 /* Physical framebuffer (800x480 landscape panel) */
@@ -124,11 +125,11 @@ static inline void lcd_rotate_coords(uint16_t log_x, uint16_t log_y, uint16_t *p
 }
 
 /**
- * @brief  Initialize LCD backlight
+ * @brief  Initialize LCD backlight (PWM on TIM3_CH2)
  */
 void LCD_Init(void)
 {
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 }
 
 /**

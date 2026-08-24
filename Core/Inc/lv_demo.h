@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-void lvgl_demo_create(void);
+void lvgl_demo_create(lv_obj_t *scr);
+void lvgl_brightness_create(lv_obj_t *scr);
 
 #ifdef __cplusplus
 }

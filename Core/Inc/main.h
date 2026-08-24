@@ -85,10 +85,10 @@ void Error_Handler(void);
 #define FMC_SDNE0_GPIO_Port GPIOC
 #define FMC_SDCKE0_Pin GPIO_PIN_3
 #define FMC_SDCKE0_GPIO_Port GPIOC
-#define WK_UP_Pin GPIO_PIN_0
-#define WK_UP_GPIO_Port GPIOA
-#define KEY1_Pin GPIO_PIN_2
-#define KEY1_GPIO_Port GPIOH
+#define KEY_UP_Pin GPIO_PIN_0
+#define KEY_UP_GPIO_Port GPIOA
+#define KEY_DOWN_Pin GPIO_PIN_2
+#define KEY_DOWN_GPIO_Port GPIOH
 #define KEY0_Pin GPIO_PIN_3
 #define KEY0_GPIO_Port GPIOH
 #define QSPI_CLK_Pin GPIO_PIN_2
@@ -149,8 +149,6 @@ void Error_Handler(void);
 #define FMC_D3_GPIO_Port GPIOD
 #define FMC_SDNCAS_Pin GPIO_PIN_15
 #define FMC_SDNCAS_GPIO_Port GPIOG
-#define LCD_BL_Pin GPIO_PIN_5
-#define LCD_BL_GPIO_Port GPIOB
 #define QSPI_BK1_NCS_Pin GPIO_PIN_6
 #define QSPI_BK1_NCS_GPIO_Port GPIOB
 #define FMC_NBL0_Pin GPIO_PIN_0

@@ -88,8 +88,9 @@ extern const uint8_t _binary_clean_text_alpha_raw_end[];
 
 /* Page state enumeration */
 typedef enum {
-    PAGE_ANIMATION = 0,
-    PAGE_LVGL      = 1,
+    PAGE_ANIMATION  = 0,
+    PAGE_LVGL       = 1,
+    PAGE_BRIGHTNESS = 2,
 } PageState_t;
 
 extern volatile PageState_t current_page;

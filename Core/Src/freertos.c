@@ -207,8 +207,8 @@ void StartDefaultTask(void *argument)
       led_tick = 0;
     }
 
-    /* LVGL task handler: call frequently (5ms) when LVGL is active */
-    if (lv_is_initialized() && current_page == PAGE_LVGL)
+    /* LVGL task handler: call frequently (5ms) when LVGL or Brightness page is active */
+    if (lv_is_initialized() && (current_page == PAGE_LVGL || current_page == PAGE_BRIGHTNESS))
     {
       lv_task_handler();
     }
@@ -221,14 +221,13 @@ void StartDefaultTask(void *argument)
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
-/* USER CODE END Application */
-
-/* USER CODE BEGIN 1 */
+/* LVGL 1ms tick callback - increments LVGL tick counter.
+   Placed in USER CODE section so CubeMX won't overwrite it. */
 void LVTickCallback(void *argument)
 {
   (void)argument;
   lv_tick_inc(1);
 }
 
-/* USER CODE END 1 */
+/* USER CODE END Application */
 

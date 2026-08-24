@@ -48,15 +48,19 @@ extern LTDC_HandleTypeDef hltdc;
 
 static uint32_t fb_active = FB_FRONT;
 
+/* LVGL page background colour (RGB565). Change to set PAGE_LVGL background.
+ * Examples: 0xFFFF=white, 0x0000=black, 0xF800=red, 0x07E0=green, 0x001F=blue.
+ */
+#define LVGL_BG_COLOR_RGB565 0x0000U
+
 /* Current page state (default: animation page) */
 volatile PageState_t current_page = PAGE_ANIMATION;
 
 /* Previous button states for falling-edge detection (1 = released, active low) */
 static uint8_t prev_key0 = 1;
-static uint8_t prev_key2 = 1;
 
-/* Flag to prevent lvgl_demo_create() from being called multiple times */
-static uint8_t lvgl_demo_created = 0;
+/* Previous state for KEY2 falling-edge detection (1 = released, active low) */
+static uint8_t prev_key2 = 1;
 
 /*---------------------------------------------------------------------------
  * Swap LTDC layer to a new framebuffer address (immediate)
@@ -151,6 +155,49 @@ static void ClearLayer2_OpaqueBlack(void)
     {
         ui_buf[i] = 0x8000;
     }
+}
+
+/*---------------------------------------------------------------------------
+ * Fill LTDC Layer 2 UI buffer to opaque black (ARGB1555=0x8000)
+ * Used when switching to LVGL/Brightness pages to pre-fill the background
+ * before LVGL renders its widgets. This prevents the visible band-by-band
+ * background painting that occurs when LVGL flushes each 480x80 band.
+ *
+ * All three pages (Animation, LVGL, Brightness) use black backgrounds, so
+ * pre-filling with opaque black avoids any white flash during transitions.
+ *
+ * ARGB1555 opaque black: alpha=1, R=0, G=0, B=0 = 0x8000
+ * Uses DMA2D R2M for fast fill, then cleans D-Cache so LTDC reads the data.
+ *---------------------------------------------------------------------------
+ */
+static void FillLayer2_OpaqueBlack(void)
+{
+    /* Use a local DMA2D configuration to avoid disturbing the global hdma2d
+     * handle which may be configured for RGB565 output. We configure for
+     * ARGB1555 output to match the Layer 2 buffer format.
+     */
+    DMA2D_HandleTypeDef hdma2d_local;
+    hdma2d_local.Instance = DMA2D;
+    hdma2d_local.Init.Mode         = DMA2D_R2M;
+    hdma2d_local.Init.ColorMode    = DMA2D_OUTPUT_ARGB1555;
+    hdma2d_local.Init.OutputOffset = 0;
+    hdma2d_local.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d_local.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d_local);
+
+    /* ARGB8888 opaque black = 0xFF000000 (Alpha=0xFF, R=0, G=0, B=0)
+     * The HAL DMA2D_SetConfig() expects the input color in ARGB8888 format and
+     * converts it to the target output format (ARGB1555). The conversion logic
+     * extracts alpha from bit31, red from bits 23:16, green from bits 15:8, blue
+     * from bits 7:0. So 0xFF000000 correctly produces ARGB1555 0x8000 (opaque black).
+     * Previously 0x00008000 was used, which has bit31=0 → alpha=0 → transparent!
+     */
+    HAL_DMA2D_Start(&hdma2d_local, 0xFF000000, UI_BUF_ADDR, UI_BUF_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d_local, 100);
+
+    /* Clean D-Cache so LTDC reads the freshly filled black pixels from SDRAM */
+    /* Layer 2 buffer is 800 (physical width) x 480 (physical height) = 384,000 pixels */
+    SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, UI_BUF_STRIDE * 480 * sizeof(uint16_t));
 }
 
 /*---------------------------------------------------------------------------
@@ -253,6 +300,10 @@ LV_FONT_DECLARE(lv_font_montserrat_24);
 #define LV_FONT (&lv_font_montserrat_24)
 
 #include "lv_demo.h"
+
+/* LVGL screen references for page switching (create once, load on switch) */
+static lv_obj_t *lvgl_screen = NULL;
+static lv_obj_t *brightness_screen = NULL;
 
 #define FN_X         4
 #define FN_Y         4
@@ -365,28 +416,28 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
 }
 
 /*---------------------------------------------------------------------------
- * Switch to LVGL page: restore a clean background and make Layer 2
- * transparent so LVGL can render its widgets (no pre-drawn overlay).
+ * Switch to LVGL page: pre-fill Layer 2 with opaque black, clear Layer 1
+ * animation buffers to black, then load the LVGL screen on top.
  *--------------------------------------------------------------------------
  */
 static void SwitchToLVGLPage(void)
 {
-    /* Make Layer 2 transparent so LVGL rendering is visible and not
-     * occluded by pre-drawn opaque pixels.
-     */
-    ClearLayer2_Transparent();
-    /* Fill both animation framebuffers with opaque white so the transparent
-     * Layer2 appears over a white background while LVGL is active. This
-     * prevents a black background when animation buffers were previously
-     * cleared to black. Fill BOTH buffers, because regardless of which one
-     * is active (fb_active), we need a clean white background when switching.
+    /*---------------------------------------------------------------------------
+     * Pre-fill Layer 2 with opaque black BEFORE loading the LVGL screen.
+     * This is the key fix for the "background paint" flash:
      *
-     * Call HAL_DMA2D_Abort() before starting to ensure DMA2D is in READY
-     * state even if a previous transfer was interrupted. Without this,
-     * DMA2D can get stuck in a BUSY state and the fill operation is skipped,
-     * leaving stale animation pixels in the framebuffer (black/dirty background).
+     * The old behaviour (ClearLayer2_Transparent) cleared Layer 2 to transparent,
+     * then LVGL would render the screen in 480x80 pixel bands. Each band flushed
+     * the background to Layer 2 sequentially, causing the user to see a
+     * visible band-by-band "painting" of the background.
+     *
+     * By pre-filling the entire Layer 2 with opaque black using DMA2D R2M,
+     * the background is instant — the user never sees it being painted.
+     * LVGL then renders widgets on top of the already-black background.
+     * All three pages use black backgrounds, so this avoids any white flash.
+     *---------------------------------------------------------------------------
      */
-    /* Use DMA2D R2M to fill back buffer */
+    FillLayer2_OpaqueBlack();
     hdma2d.Init.Mode         = DMA2D_R2M;
     hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
     hdma2d.Init.OutputOffset = 0;
@@ -394,41 +445,36 @@ static void SwitchToLVGLPage(void)
     hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
     HAL_DMA2D_Init(&hdma2d);
 
+    /* Determine the inactive buffer and fill it first */
+    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
+    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
+
     HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, 0xFFFFFFFF, FB_BACK, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 100);
-    SCB_CleanDCache_by_Addr((uint32_t *)FB_BACK, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
-    /* Fill front buffer using DMA2D R2M */
+    /* Now atomically switch LTDC to the fully-initialized buffer */
+    LTDC_Layer1->CFBAR = inactive_fb;
+    fb_active = inactive_fb;
+
+    /* Fill the now-inactive (previously active) buffer so both are initialized */
     HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, 0xFFFFFFFF, FB_FRONT, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 100);
-    SCB_CleanDCache_by_Addr((uint32_t *)FB_FRONT, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
-    /* Ensure LTDC shows the white front buffer, reset fb_active to known state */
-    LTDC_Layer1->CFBAR = FB_FRONT;
-    fb_active = FB_FRONT;
-
-    /* Ensure LVGL demo widgets are created only once (avoid duplicate labels
-     * on repeated switches). The lv_refr_now(NULL) call forces an immediate
-     * flush so Layer 2 shows the LVGL content before the next animation tick.
-     *
-     * On subsequent switches, invalidate the entire active screen before
-     * lv_refr_now(NULL) so that LVGL re-renders all existing widgets even
-     * when no new widgets are created. Without this, lv_refr_now(NULL) may
-     * skip the flush callback because no dirty areas exist, resulting in a
-     * blank white screen (no text visible).
+    /* Ensure LVGL demo screen is created (once) and loaded.
+     * Using separate screens avoids the race condition and memory corruption
+     * caused by lv_obj_clean() + recreate on rapid page switches.
      */
     if (lv_is_initialized()) {
-        if (!lvgl_demo_created) {
-            lvgl_demo_create();
-            lvgl_demo_created = 1;
+        if (lvgl_screen == NULL) {
+            lvgl_screen = lv_obj_create(NULL);
+            lvgl_demo_create(lvgl_screen);
         }
-        /* Invalidate the entire screen to force a full re-render */
-        lv_obj_invalidate(lv_scr_act());
-        /* Force an immediate LVGL refresh so flush_cb writes at least once
-         * before animation resumes. This helps avoid transient black frames.
-         */
+        lv_scr_load(lvgl_screen);
+        lv_obj_invalidate(lvgl_screen);
         lv_refr_now(NULL);
     }
 
@@ -477,6 +523,62 @@ static void SwitchToAnimationPage(void)
     PreRenderUI();
 
     printf("PAGE: switched to Animation (buffers cleared)\r\n");
+}
+
+/*---------------------------------------------------------------------------
+ * Switch to Brightness page: same as LVGL page but with "Brightness" text
+ *---------------------------------------------------------------------------
+ */
+static void SwitchToBrightnessPage(void)
+{
+    /*---------------------------------------------------------------------------
+     * Same fix as SwitchToLVGLPage: pre-fill Layer 2 with opaque black before
+     * loading the LVGL screen, preventing the band-by-band background paint
+     * flash. All three pages use black backgrounds, so no white flash.
+     *---------------------------------------------------------------------------
+     */
+    FillLayer2_OpaqueBlack();
+
+    /* Fill both animation framebuffers (Layer 1) with black. Since Layer 2 is
+     * already filled with opaque black, the content of Layer 1 is completely
+     * hidden. We fill Layer 1 to black for consistency and to avoid stale
+     * animation pixels in case of future layer reconfiguration.
+     */
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+
+    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
+    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    LTDC_Layer1->CFBAR = inactive_fb;
+    fb_active = inactive_fb;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    /* Set up Brightness LVGL screen (create once, load on switch) */
+    if (lv_is_initialized()) {
+        if (brightness_screen == NULL) {
+            brightness_screen = lv_obj_create(NULL);
+            lvgl_brightness_create(brightness_screen);
+        }
+        lv_scr_load(brightness_screen);
+        lv_obj_invalidate(brightness_screen);
+        lv_refr_now(NULL);
+    }
+
+    printf("PAGE: switched to Brightness\r\n");
 }
 
 /*---------------------------------------------------------------------------
@@ -617,46 +719,59 @@ void StartAnimationTask(void *argument)
         osSemaphoreAcquire(anim_sem_id, osWaitForever);
 
         /*---------------------------------------------------------------------------
-         * Poll KEY0 and KEY2 for page switching (50ms debounce, falling edge)
-         * KEY0 = PH3, KEY2 = PC12, both active low
+         * Poll KEY0 and KEY2 for page cycling (50ms debounce, falling edge)
+         * KEY0 = PH3, KEY2 = PH2, both active low
+         * KEY2 = previous page, KEY0 = next page, 3-page circular loop
          *---------------------------------------------------------------------------
          */
         {
             uint8_t key0 = (HAL_GPIO_ReadPin(KEY0_GPIO_Port, KEY0_Pin) == GPIO_PIN_RESET) ? 0 : 1;
             uint8_t key2 = (HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin) == GPIO_PIN_RESET) ? 0 : 1;
 
-            /* Debug: log key state changes to help diagnose unresponsive KEY2 */
+            /* Debug: log key state changes */
             if (key0 != prev_key0 || key2 != prev_key2)
             {
                 printf("DEBUG_KEYS: key0=%d key2=%d\r\n", key0, key2);
             }
 
-            /* KEY0 falling edge: switch to LVGL page */
+            /* KEY0 falling edge: advance to next page (0→1→2→0→...)
+             * Set current_page BEFORE calling switch function to prevent the
+             * defaultTask (which runs lv_task_handler() when current_page == PAGE_LVGL)
+             * from calling LVGL functions concurrently with lv_refr_now(NULL) inside
+             * the switch function. This avoids a race condition that causes a crash
+             * when switching to Brightness page via KEY0 (LVGL → Brightness).
+             */
             if (prev_key0 == 1 && key0 == 0)
             {
-                if (current_page == PAGE_ANIMATION)
-                {
-                    SwitchToLVGLPage();
-                    current_page = PAGE_LVGL;
+                PageState_t next = (current_page + 1) % 3;
+                current_page = next;
+                switch (next) {
+                    case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
+                    case PAGE_LVGL:       SwitchToLVGLPage();       break;
+                    case PAGE_BRIGHTNESS: SwitchToBrightnessPage(); break;
                 }
             }
 
-            /* KEY2 falling edge: switch to Animation page */
+            /* KEY2 falling edge: go to previous page (0→2→1→0→...) */
             if (prev_key2 == 1 && key2 == 0)
             {
-                if (current_page == PAGE_LVGL)
-                {
-                    current_page = PAGE_ANIMATION;
-                    SwitchToAnimationPage();
+                PageState_t prev = (current_page + 2) % 3;  /* -1 mod 3 */
+                current_page = prev;
+                switch (prev) {
+                    case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
+                    case PAGE_LVGL:       SwitchToLVGLPage();       break;
+                    case PAGE_BRIGHTNESS: SwitchToBrightnessPage(); break;
                 }
             }
+
+
 
             prev_key0 = key0;
             prev_key2 = key2;
         }
 
-        /* Skip rendering when in LVGL page (keep polling buttons) */
-        if (current_page == PAGE_LVGL)
+        /* Skip rendering when not on the animation page (keep polling buttons) */
+        if (current_page != PAGE_ANIMATION)
         {
             continue;
         }

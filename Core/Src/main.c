@@ -23,6 +23,7 @@
 #include "dma2d.h"
 #include "ltdc.h"
 #include "quadspi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
@@ -112,6 +113,7 @@ int main(void)
   MX_DMA2D_Init();
   MX_LTDC_Init();
   MX_QUADSPI_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   /* Enable IO compensation cell (required for FMC high-speed IOs) */
