@@ -100,7 +100,7 @@ static const lv_img_dsc_t *text_normal[3] = {
 static const uint16_t brightness_levels[3] = {
     999,   /* High */
     400,   /* Medium */
-    0      /* Off */
+    100      /* Off */
 };
 
 static void brightness_update_selection(int sel)

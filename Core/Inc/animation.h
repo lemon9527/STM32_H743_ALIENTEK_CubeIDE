@@ -56,12 +56,6 @@ extern "C" {
 #define ANIM_DST_X          160
 #define ANIM_DST_Y          80
 
-/* Bottom bar: 320x134 source, appears as 320x134 in logical (portrait) space */
-#define BAR_WIDTH           320
-#define BAR_HEIGHT          134
-#define BAR_DST_X           506
-#define BAR_DST_Y           80
-
 /*
  * clean_text overlay: 140x116 logical, centered on animation area.
  *   Animation logical: (80, 160) to (400, 480) = 320x320
@@ -76,10 +70,6 @@ extern "C" {
 #define OVLY_DST_Y          169
 
 /* External symbols for clean_text overlay data (embedded in Flash .rodata.video) */
-extern const uint8_t _binary_bottom_bar_raw_start[];
-extern const uint8_t _binary_bottom_bar_raw_end[];
-
-/* clean_text RGB565 pixels (2 bytes each, 140x116 = 32480 bytes) */
 extern const uint8_t _binary_clean_text_rgb_raw_start[];
 extern const uint8_t _binary_clean_text_rgb_raw_end[];
 /* clean_text alpha (1 byte each, 140x116 = 16240 bytes) */

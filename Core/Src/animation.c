@@ -17,6 +17,7 @@
 #include "dma2d.h"
 #include "gpio.h"
 #include "cmsis_os2.h"
+#include "icon_resource/bottom_bar_icons.h"
 #include <stdio.h>
 #include <string.h>
 #include "stm32h7xx.h"
@@ -145,85 +146,140 @@ static void ClearLayer2_Transparent(void)
 }
 
 /*---------------------------------------------------------------------------
- * Clear LTDC Layer 2 UI buffer to opaque black (ARGB1555=0x8000)
- *---------------------------------------------------------------------------
- */
-static void ClearLayer2_OpaqueBlack(void)
-{
-    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
-    for (uint32_t i = 0; i < 800 * 480; i++)
-    {
-        ui_buf[i] = 0x8000;
-    }
-}
-
-/*---------------------------------------------------------------------------
  * Fill LTDC Layer 2 UI buffer to opaque black (ARGB1555=0x8000)
- * Used when switching to LVGL/Brightness pages to pre-fill the background
- * before LVGL renders its widgets. This prevents the visible band-by-band
- * background painting that occurs when LVGL flushes each 480x80 band.
- *
- * All three pages (Animation, LVGL, Brightness) use black backgrounds, so
- * pre-filling with opaque black avoids any white flash during transitions.
- *
- * ARGB1555 opaque black: alpha=1, R=0, G=0, B=0 = 0x8000
- * Uses DMA2D R2M for fast fill, then cleans D-Cache so LTDC reads the data.
+ * Uses DMA2D R2M for fast fill. Two critical requirements:
+ *   1) Color value must be ARGB8888 format with bit31=1 (alpha=255):
+ *      0xFF000000 → correctly produces ARGB1555 0x8000 (opaque black)
+ *      0x00008000 → bit31=0, alpha=0 → transparent fill!
+ *   2) Local handle State must be HAL_DMA2D_STATE_RESET before Init,
+ *      otherwise HAL_DMA2D_Init may silently skip configuration.
+ *   3) HAL_DMA2D_Abort() must be called before reconfiguring to ensure
+ *      DMA2D is in a clean state (not busy from a previous M2M transfer).
  *---------------------------------------------------------------------------
  */
 static void FillLayer2_OpaqueBlack(void)
 {
-    /* Use a local DMA2D configuration to avoid disturbing the global hdma2d
-     * handle which may be configured for RGB565 output. We configure for
-     * ARGB1555 output to match the Layer 2 buffer format.
-     */
-    DMA2D_HandleTypeDef hdma2d_local;
-    hdma2d_local.Instance = DMA2D;
-    hdma2d_local.Init.Mode         = DMA2D_R2M;
-    hdma2d_local.Init.ColorMode    = DMA2D_OUTPUT_ARGB1555;
-    hdma2d_local.Init.OutputOffset = 0;
-    hdma2d_local.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
-    hdma2d_local.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Abort(&hdma2d);
+
+    DMA2D_HandleTypeDef hdma2d_local = {0};
+    hdma2d_local.Instance              = DMA2D;
+    hdma2d_local.State                 = HAL_DMA2D_STATE_RESET;  /* must be RESET for Init to work */
+    hdma2d_local.Init.Mode             = DMA2D_R2M;
+    hdma2d_local.Init.ColorMode        = DMA2D_OUTPUT_ARGB1555;
+    hdma2d_local.Init.OutputOffset     = 0;
+    hdma2d_local.Init.AlphaInverted    = DMA2D_REGULAR_ALPHA;
+    hdma2d_local.Init.RedBlueSwap      = DMA2D_RB_REGULAR;
     HAL_DMA2D_Init(&hdma2d_local);
 
     /* ARGB8888 opaque black = 0xFF000000 (Alpha=0xFF, R=0, G=0, B=0)
-     * The HAL DMA2D_SetConfig() expects the input color in ARGB8888 format and
-     * converts it to the target output format (ARGB1555). The conversion logic
-     * extracts alpha from bit31, red from bits 23:16, green from bits 15:8, blue
-     * from bits 7:0. So 0xFF000000 correctly produces ARGB1555 0x8000 (opaque black).
-     * Previously 0x00008000 was used, which has bit31=0 → alpha=0 → transparent!
+     * HAL DMA2D_SetConfig extracts alpha from bit31, so bit31=1 → alpha=255.
      */
     HAL_DMA2D_Start(&hdma2d_local, 0xFF000000, UI_BUF_ADDR, UI_BUF_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d_local, 100);
 
-    /* Clean D-Cache so LTDC reads the freshly filled black pixels from SDRAM */
-    /* Layer 2 buffer is 800 (physical width) x 480 (physical height) = 384,000 pixels */
-    SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, UI_BUF_STRIDE * 480 * sizeof(uint16_t));
+    /*---------------------------------------------------------------------------
+     * Invalidate D-Cache for Layer 2 buffer after DMA2D write.
+     *
+     * CRITICAL: During pre-creation of LVGL screens in StartAnimationTask(),
+     * the CPU writes LVGL pixels to Layer 2 via the flush callback. These
+     * writes go to D-Cache, NOT to SDRAM directly.
+     *
+     * When FillLayer2_OpaqueBlack() runs later (on page switch), DMA2D fills
+     * Layer 2 directly in SDRAM, bypassing D-Cache. The D-Cache now contains
+     * STALE data from the pre-creation phase.
+     *
+     * If the subsequent lv_refr_now(NULL) CPU writes trigger D-Cache evictions,
+     * the stale cached data (old LVGL pixels) would be written back to SDRAM,
+     * OVERWRITING the DMA2D fill. This causes visible white/colored pixels
+     * appearing as a diagonal scroll on the first page switch.
+     *
+     * InvalidateDCache discards the stale cache lines, forcing the CPU to
+     * read from SDRAM (which has the correct DMA2D fill data).
+     *---------------------------------------------------------------------------
+     */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
 }
 
 /*---------------------------------------------------------------------------
  * Pre-render static overlay elements to LTDC Layer 2 UI buffer
- * Called once at startup. Draws bottom bar + clean_text on the UI buffer.
+ * Called once at startup. Draws bottom bar icons + clean_text on UI buffer.
  * Layer 2 uses ARGB1555 format: alpha=1 for overlay, alpha=0 for transparent.
  *---------------------------------------------------------------------------
  */
 static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color);
+static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
+                               const char *text, uint16_t color);
+
+/*---------------------------------------------------------------------------
+ * Render a single bottom-bar icon on the UI buffer with 90° CW rotation.
+ *   icon:   icon descriptor (RGB565 pixel data)
+ *   log_x:  logical left edge of the icon (portrait coordinate)
+ *   log_y:  logical top edge of the icon (portrait coordinate)
+ *   ui_buf: pointer to the UI buffer (ARGB1555)
+ *
+ * 90° CW rotation: logical (sx, sy) -> physical (log_y + sy, 479 - log_x - sx)
+ * Pixels with value 0x0001 (transparent marker) are skipped.
+ * Pixel value 0x0000 is actual black (from black-background images), NOT skipped.
+ *---------------------------------------------------------------------------
+ */
+static void DrawIcon(const icon_desc_t *icon, uint16_t log_x, uint16_t log_y,
+                     uint16_t *ui_buf)
+{
+    const uint8_t *src = icon->data;
+    int w = icon->w;
+    int h = icon->h;
+
+    for (int sy = 0; sy < h; sy++)
+    {
+        for (int sx = 0; sx < w; sx++)
+        {
+            /* Read RGB565 (little-endian) */
+            uint16_t pixel = (uint16_t)src[sy * icon->stride + sx * 2]
+                           | ((uint16_t)src[sy * icon->stride + sx * 2 + 1] << 8);
+            /* Skip transparent marker (0x0001) */
+            if (pixel == 0x0001)
+                continue;
+            /* 90° CW rotation: logical (log_x + sx, log_y + sy) -> physical */
+            int px = log_y + sy;
+            int py = 479 - log_x - sx;
+            ui_buf[py * UI_BUF_STRIDE + px] = rgb565_to_argb1555(pixel);
+        }
+    }
+}
 
 static void PreRenderUI(void)
 {
     uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
 
-    /* Bottom bar: 320x134 RGB565, 90 deg CCW rotation */
-    const uint16_t *bar_src = (const uint16_t *)_binary_bottom_bar_raw_start;
-    for (int sy = 0; sy < BAR_HEIGHT; sy++)
-    {
-        for (int sx = 0; sx < BAR_WIDTH; sx++)
-        {
-            /* 90 deg CCW: source (sx, sy) -> physical (BAR_DST_X + sy, BAR_DST_Y + (BAR_WIDTH-1-sx)) */
-            int px = BAR_DST_X + sy;
-            int py = BAR_DST_Y + (BAR_WIDTH - 1 - sx);
-            ui_buf[py * UI_BUF_STRIDE + px] = rgb565_to_argb1555(bar_src[sy * BAR_WIDTH + sx]);
-        }
-    }
+    /*---------------------------------------------------------------------------
+     * Bottom label image — placed at the bottom of the 320x480 rectangular border.
+     *
+     * Rect border logical coordinates: x 80..400, y 160..640.
+     * Image is 320x143 (scaled to width=320), positioned at the bottom edge.
+     *   log_x = 80 (left edge of the rect)
+     *   log_y = 640 - 143 = 497 (bottom of rect - image height)
+     *
+     * The image has been pre-processed to remove the "豆包AI生成" watermark
+     * at the bottom-right corner and the large number in the middle.
+     *---------------------------------------------------------------------------
+     */
+    DrawIcon(&bottom_label, 80, 497, ui_buf);
+
+    /*---------------------------------------------------------------------------
+     * Bottom bar sensor numbers — Montserrat 32, white, centered under icons.
+     *
+     * Middle space: y=528 (pm25 bottom) to y=570 (ugm3 top), 42px height.
+     * Font: Montserrat 32 (line_height=35, base_line=6, ascender=29, digit ~23px).
+     * Vertically centered: log_y = 531 → glyph extends from y=537 to y=560.
+     *
+     * Horizontal centers (same as bottom bar icons):
+     *   PM2.5 center x = 146, TVOC center x = 239, CO2 center x = 322
+     * Numbers are centered at these positions.
+     *---------------------------------------------------------------------------
+     */
+    DrawNumberAtCenter(146, 554, "1",   0xFFFF);
+    DrawNumberAtCenter(239, 554, "30",  0xFFFF);
+    DrawNumberAtCenter(332, 554, "480", 0xFFFF);
 
     /* Clean text: 140x116 RGB565, 90 deg CCW rotation, full image (with black bg) */
     const uint16_t *text_rgb = (const uint16_t *)_binary_clean_text_rgb_raw_start;
@@ -288,6 +344,14 @@ static void PreRenderUI(void)
     DrawTextLineCenter(70,  "animation demo",   0xFFFF);
     DrawTextLineCenter(102, "STM32H743IIT6",    0xFFFF);
     DrawTextLineCenter(134, "20fps",            0xFFFF);
+
+    /*---------------------------------------------------------------------------
+     * Clean D-Cache for the Layer 2 UI buffer so LTDC reads the freshly
+     * rendered data from SDRAM. Without this, the CPU's write-back cache
+     * holds the data and LTDC (reading from SDRAM via AHB) sees stale data.
+     *---------------------------------------------------------------------------
+     */
+    SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
 }
 
 /* Font metrics for frame number (8x16 bitmap, 2x scaled) */
@@ -298,6 +362,9 @@ static void PreRenderUI(void)
 #include "src/font/lv_font.h"
 LV_FONT_DECLARE(lv_font_montserrat_24);
 #define LV_FONT (&lv_font_montserrat_24)
+
+/* Roboto Bold 32 for bottom bar sensor numbers (closer to UI design spec) */
+LV_FONT_DECLARE(roboto_bold_32);
 
 #include "lv_demo.h"
 
@@ -416,6 +483,99 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
 }
 
 /*---------------------------------------------------------------------------
+ * Draw a number string centered at a specific logical x position.
+ * Uses Montserrat 32 font (anti-aliased) for the bottom bar sensor values.
+ *   center_x: logical x of the number's center
+ *   log_y:    logical y position (top of the text line)
+ *   color:    ARGB1555 color (must have A=1 bit set, e.g. 0xFFFF for white)
+ *---------------------------------------------------------------------------
+ */
+static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
+                               const char *text, uint16_t color)
+{
+    const lv_font_t *font = &roboto_bold_32;
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+
+    /* First pass: calculate total width */
+    int len = strlen(text);
+    int total_w = 0;
+    for (int i = 0; i < len; i++)
+    {
+        lv_font_glyph_dsc_t dsc;
+        if (lv_font_get_glyph_dsc(font, &dsc, (uint32_t)(uint8_t)text[i], 0))
+            total_w += dsc.adv_w;
+        else
+            total_w += font->line_height / 2;
+    }
+
+    /* Center at the given position */
+    int cursor_x = (int)center_x - total_w / 2;
+
+    /* Second pass: render each glyph */
+    for (int i = 0; i < len; i++)
+    {
+        uint32_t letter = (uint32_t)(uint8_t)text[i];
+        lv_font_glyph_dsc_t dsc;
+        if (!lv_font_get_glyph_dsc(font, &dsc, letter, 0))
+        {
+            cursor_x += font->line_height / 2;
+            continue;
+        }
+
+        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, letter);
+        if (!bmp) continue;
+        int bpp = dsc.bpp;
+
+        int gpos_y = log_y + (font->line_height - font->base_line) - dsc.box_h - dsc.ofs_y;
+
+        for (int row = 0; row < dsc.box_h; row++)
+        {
+            for (int col = 0; col < dsc.box_w; col++)
+            {
+                int pixel_idx = row * dsc.box_w + col;
+                uint8_t pixel_val;
+
+                if (bpp == 1)
+                    pixel_val = (bmp[pixel_idx / 8] >> (7 - (pixel_idx % 8))) & 1;
+                else if (bpp == 2)
+                    pixel_val = (bmp[pixel_idx / 4] >> (6 - 2 * (pixel_idx % 4))) & 3;
+                else if (bpp == 4)
+                    pixel_val = (bmp[pixel_idx / 2] >> (4 * (1 - (pixel_idx % 2)))) & 0x0F;
+                else
+                    pixel_val = bmp[pixel_idx];
+
+                if (pixel_val == 0) continue;
+
+                int lx = cursor_x + dsc.ofs_x + col;
+                int ly = gpos_y + row;
+
+                /* 90° CCW rotation: physical (px, py) = (ly, 479 - lx) */
+                int px = ly;
+                int py = 479 - lx;
+
+                if (px < 800 && py < 480)
+                {
+                    if (bpp > 1)
+                    {
+                        int max_val = (1 << bpp) - 1;
+                        int r = ((color >> 10) & 0x1F) * pixel_val / max_val;
+                        int g = ((color >> 5) & 0x1F) * pixel_val / max_val;
+                        int b = (color & 0x1F) * pixel_val / max_val;
+                        ui_buf[py * UI_BUF_STRIDE + px] = 0x8000 | (r << 10) | (g << 5) | b;
+                    }
+                    else
+                    {
+                        ui_buf[py * UI_BUF_STRIDE + px] = color;
+                    }
+                }
+            }
+        }
+
+        cursor_x += dsc.adv_w;
+    }
+}
+
+/*---------------------------------------------------------------------------
  * Switch to LVGL page: pre-fill Layer 2 with opaque black, clear Layer 1
  * animation buffers to black, then load the LVGL screen on top.
  *--------------------------------------------------------------------------
@@ -467,6 +627,16 @@ static void SwitchToLVGLPage(void)
     /* Ensure LVGL demo screen is created (once) and loaded.
      * Using separate screens avoids the race condition and memory corruption
      * caused by lv_obj_clean() + recreate on rapid page switches.
+     *
+     * NOTE: We do NOT disable Layer 2 or call lv_refr_now(NULL) here.
+     * Since current_page is set at the end of this function, the default
+     * task's lv_task_handler() does NOT run during the switch. The LVGL
+     * task handler will incrementally render dirty areas after the switch
+     * completes (~5ms per band, 6 bands total). The black background from
+     * FillLayer2_OpaqueBlack() fills the gap, so no visible artifacts.
+     *
+     * This approach is much faster than the old Layer 2 disable/enable
+     * protocol which required a 20ms VSYNC wait + full LVGL render.
      */
     if (lv_is_initialized()) {
         if (lvgl_screen == NULL) {
@@ -474,11 +644,19 @@ static void SwitchToLVGLPage(void)
             lvgl_demo_create(lvgl_screen);
         }
         lv_scr_load(lvgl_screen);
+        /* Explicitly invalidate the screen to force re-render.
+         * CRITICAL: When switching away from an LVGL page (e.g. to Animation)
+         * and back, lv_scr_load() detects that the screen is already the
+         * active screen (disp->act_scr == scr) and returns early WITHOUT
+         * calling lv_obj_invalidate(). Without this explicit invalidation,
+         * the LVGL task handler skips rendering, and Layer 2 shows black
+         * (from FillLayer2_OpaqueBlack()).
+         */
         lv_obj_invalidate(lvgl_screen);
-        lv_refr_now(NULL);
     }
 
     printf("PAGE: switched to LVGL\r\n");
+    current_page = PAGE_LVGL;
 }
 
 /*---------------------------------------------------------------------------
@@ -523,6 +701,7 @@ static void SwitchToAnimationPage(void)
     PreRenderUI();
 
     printf("PAGE: switched to Animation (buffers cleared)\r\n");
+    current_page = PAGE_ANIMATION;
 }
 
 /*---------------------------------------------------------------------------
@@ -567,18 +746,25 @@ static void SwitchToBrightnessPage(void)
     HAL_DMA2D_PollForTransfer(&hdma2d, 100);
     SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
-    /* Set up Brightness LVGL screen (create once, load on switch) */
+    /* Set up Brightness LVGL screen (create once, load on switch)
+     * Same approach as SwitchToLVGLPage: no Layer 2 disable/enable,
+     * no lv_refr_now(NULL), let the LVGL task handler render naturally.
+     */
     if (lv_is_initialized()) {
         if (brightness_screen == NULL) {
             brightness_screen = lv_obj_create(NULL);
             lvgl_brightness_create(brightness_screen);
         }
         lv_scr_load(brightness_screen);
+        /* Same critical invalidation as SwitchToLVGLPage: without this,
+         * lv_scr_load() may return early if the screen is already active,
+         * and the LVGL task handler won't re-render.
+         */
         lv_obj_invalidate(brightness_screen);
-        lv_refr_now(NULL);
     }
 
     printf("PAGE: switched to Brightness\r\n");
+    current_page = PAGE_BRIGHTNESS;
 }
 
 /*---------------------------------------------------------------------------
@@ -713,6 +899,25 @@ void StartAnimationTask(void *argument)
     printf("Animation Phase 6: Raw RGB565 QSPI, %lu frames, %dx%d at %dfps\r\n",
            num_frames, ANIM_FRAME_WIDTH, ANIM_FRAME_HEIGHT, ANIM_FPS);
 
+    /*---------------------------------------------------------------------------
+     * Pre-create LVGL screens during initialization.
+     * This ensures the slow initial widget creation and LVGL style setup
+     * happens during power-up, NOT during the user's first page switch.
+     * Without this, the first switch triggers a full LVGL render + flush
+     * that is visible as a diagonally scrolling white flash.
+     *---------------------------------------------------------------------------
+     */
+    if (lv_is_initialized()) {
+        if (lvgl_screen == NULL) {
+            lvgl_screen = lv_obj_create(NULL);
+            lvgl_demo_create(lvgl_screen);
+        }
+        if (brightness_screen == NULL) {
+            brightness_screen = lv_obj_create(NULL);
+            lvgl_brightness_create(brightness_screen);
+        }
+    }
+
     for (;;)
     {
         /* Wait for 50ms timer to signal next frame */
@@ -735,16 +940,17 @@ void StartAnimationTask(void *argument)
             }
 
             /* KEY0 falling edge: advance to next page (0→1→2→0→...)
-             * Set current_page BEFORE calling switch function to prevent the
-             * defaultTask (which runs lv_task_handler() when current_page == PAGE_LVGL)
-             * from calling LVGL functions concurrently with lv_refr_now(NULL) inside
-             * the switch function. This avoids a race condition that causes a crash
-             * when switching to Brightness page via KEY0 (LVGL → Brightness).
+             * NOTE: current_page is NOT set here. It is set at the end of
+             * each switch function (SwitchToLVGLPage, SwitchToBrightnessPage,
+             * SwitchToAnimationPage). This prevents the defaultTask from
+             * calling lv_task_handler() during the switch, which would
+             * concurrently access LVGL data structures with lv_refr_now(NULL)
+             * inside the switch function, causing a race condition that
+             * manifests as a diagonal white screen scroll or a system hang.
              */
             if (prev_key0 == 1 && key0 == 0)
             {
                 PageState_t next = (current_page + 1) % 3;
-                current_page = next;
                 switch (next) {
                     case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
                     case PAGE_LVGL:       SwitchToLVGLPage();       break;
@@ -756,7 +962,6 @@ void StartAnimationTask(void *argument)
             if (prev_key2 == 1 && key2 == 0)
             {
                 PageState_t prev = (current_page + 2) % 3;  /* -1 mod 3 */
-                current_page = prev;
                 switch (prev) {
                     case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
                     case PAGE_LVGL:       SwitchToLVGLPage();       break;
