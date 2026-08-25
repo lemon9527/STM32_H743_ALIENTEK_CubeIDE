@@ -3,66 +3,10 @@
 #include "lv_port_indev.h"
 #include "tim.h"
 #include "icon_resource/brightness_icons.h"
+#include "icon_resource/air_quality_icons.h"
+#include "fonts.h"
 
-void lvgl_demo_create(lv_obj_t *scr)
-{
-    /********************学习任务1 Hello World — 标签 (Label) *******************/
-
-    // 使用传入的屏幕对象，而不是 lv_scr_act()
-    lv_obj_t *src = scr;
-
-    /* Set screen background color and make it opaque so it covers
-     * the animation framebuffer beneath. Change the hex value to
-     * the desired RGB888 color (e.g. 0x000000=black, 0xFFFFFF=white).
-     */
-    lv_obj_set_style_bg_color(src, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(src, LV_OPA_COVER, 0);
-
-    /* 2. 创建与 animation 页面相同的 320x480 矩形框（蓝色边框，2px，透明背景）
-     *    并把 Hello 标签放在该矩形中心。
-     */
-    lv_obj_t *rect = lv_obj_create(src);
-    lv_obj_set_size(rect, 320, 480);
-    lv_obj_align(rect, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(rect, 2, 0);
-    lv_obj_set_style_border_color(rect, lv_palette_main(LV_PALETTE_BLUE), 0);
-    lv_obj_set_style_border_opa(rect, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(rect, 0, 0); /* 关键：直角 */
-
-    /* 3. 创建Label，作为矩形的子对象，居中显示 */
-    lv_obj_t *label_hello = lv_label_create(rect);
-    lv_label_set_text(label_hello, "Hello, LVGL!");
-    lv_obj_center(label_hello);
-
-    // 创建一个样式对象
-    static lv_style_t style_label_font;
-    lv_style_init(&style_label_font);
-
-    // 设置样式对象的中的字体属性
-    lv_style_set_text_font(&style_label_font, &lv_font_montserrat_24);
-
-    // 设置样式对象的中的字体颜色属性
-    lv_style_set_text_color(&style_label_font, lv_palette_main(LV_PALETTE_BLUE));
-
-    // 将该样式应用到Label上
-    lv_obj_add_style(label_hello, &style_label_font, 0);
-
-    /********************学习任务2 按钮 (Button) *******************/
-    // 创建一个按钮对象，作为矩形的子对象，居中显示    
-    lv_obj_t *btn = lv_btn_create(rect);
-
-    // 设置按钮的大小和位置
-    lv_obj_set_size(btn, 120, 40);
-    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 0);
-
-    // 暂时不绑定回调事件
-
-    // 在按钮上创建一个标签，显示"Click me!"文本
-    lv_obj_t *label_btn = lv_label_create(btn);
-    lv_label_set_text(label_btn, "Click me!");
-    lv_obj_center(label_btn);
-}
+/* Demo helper removed: lvgl_demo_create is unused. */
 
 /*---------------------------------------------------------------------------
  * Brightness card selection
@@ -128,12 +72,8 @@ static void brightness_key_handler(lv_event_t *e)
     if (code == LV_EVENT_KEY)
     {
         uint32_t key = *(uint32_t *)lv_event_get_param(e);
+        /* Option Button is now KEY_UP: use LV_KEY_UP to change brightness */
         if (key == LV_KEY_UP)
-        {
-            int new_sel = (brightness_selected > 0) ? brightness_selected - 1 : 2;
-            brightness_update_selection(new_sel);
-        }
-        else if (key == LV_KEY_DOWN)
         {
             int new_sel = (brightness_selected < 2) ? brightness_selected + 1 : 0;
             brightness_update_selection(new_sel);
@@ -233,4 +173,195 @@ void lvgl_brightness_create(lv_obj_t *scr)
     /* 默认选中 High（索引 0） */
     brightness_selected = 0;
     brightness_update_selection(0);
+}
+
+void lvgl_filter_create(lv_obj_t *scr)
+{
+    lv_obj_t *src = scr;
+    lv_obj_set_style_bg_color(src, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(src, LV_OPA_COVER, 0);
+
+    lv_obj_t *rect = lv_obj_create(src);
+    lv_obj_set_size(rect, 320, 480);
+    lv_obj_align(rect, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(rect, 2, 0);
+    lv_obj_set_style_border_color(rect, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_style_border_opa(rect, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(rect, 0, 0);
+    lv_obj_set_style_pad_all(rect, 0, 0);
+    lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+
+    /* Title label */
+    lv_obj_t *title = lv_label_create(rect);
+    lv_label_set_text(title, "Filter");
+    /* make title visible on black background */
+    static lv_style_t style_title;
+    lv_style_init(&style_title);
+    lv_style_set_text_color(&style_title, lv_color_white());
+    lv_style_set_text_font(&style_title, &lv_font_montserrat_24);
+    lv_obj_add_style(title, &style_title, 0);
+    lv_obj_set_pos(title, 20, 24);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);
+}
+
+void lvgl_metrics1_create(lv_obj_t *scr)
+{
+    lv_obj_t *src = scr;
+    lv_obj_set_style_bg_color(src, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(src, LV_OPA_COVER, 0);
+
+    lv_obj_t *rect = lv_obj_create(src);
+    lv_obj_set_size(rect, 320, 480);
+    lv_obj_align(rect, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(rect, 1, 0);
+    lv_obj_set_style_border_color(rect, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_style_border_opa(rect, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(rect, 0, 0);
+    lv_obj_set_style_pad_all(rect, 0, 0);
+    lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+
+    /* Four rounded cards with same style as Brightness */
+    static lv_style_t style_card;
+    lv_style_init(&style_card);
+    lv_style_set_radius(&style_card, 12);
+    lv_style_set_bg_color(&style_card, lv_color_hex(0x1A1A1A));
+    lv_style_set_bg_opa(&style_card, LV_OPA_COVER);
+    lv_style_set_border_width(&style_card, 0);
+    lv_style_set_shadow_opa(&style_card, 0);
+
+    const int n = 4;
+    const int card_w = 288;
+    const int card_x = 16;
+    const int card_gap = 8; /* gap between cards */
+    const int card_1_y = 16; /* top padding inside 320x480 */
+    /* Available height = 480 - top - bottom (16 + 16) = 448
+     * Total gaps = (n-1) * card_gap
+     * card_h = (available_height - total_gaps) / n
+     */
+    int card_h = (480 - 32 - (n - 1) * card_gap) / n;
+
+    lv_obj_t *cards[n];
+    for (int i = 0; i < n; i++)
+    {
+        lv_obj_t *card = lv_obj_create(rect);
+        lv_obj_remove_style_all(card);
+        lv_obj_add_style(card, &style_card, 0);
+        lv_obj_set_size(card, card_w, card_h);
+        lv_obj_set_pos(card, card_x, card_1_y + i * (card_h + card_gap));
+        cards[i] = card;
+    }
+
+    /* Place PM2.5 icon on the right side of the second card (cards[1]).
+     * Right margin from card = 28px, desired display size = 53x53.
+     * For the original icon size ~120px, apply zoom ~= 113 (256 * 53 / 120).
+     */
+    {
+        /* Create PM2.5 image as child of `rect` (not the card) so it can be drawn above the card
+         * and won't be clipped or occluded by card child ordering. The embedded image is already
+         * 53x53, so no zoom is required. Position is calculated relative to `rect`. */
+        lv_obj_t *pm_img = lv_img_create(rect);
+        lv_img_set_src(pm_img, &icon_pm2_5);
+        int img_w = 53;
+        int img_h = 53;
+        /* x: rect origin + card_x + (card_w - 28 - img_w) */
+        int x = card_x + (card_w - 28 - img_w);
+        /* y: rect origin + card_1_y + second card offset + vertical centering */
+        int y = card_1_y + 1 * (card_h + card_gap) + (card_h - img_h) / 2;
+        lv_obj_set_pos(pm_img, x, y);
+        /* Ensure the image is rendered above the cards */
+        lv_obj_move_foreground(pm_img);
+    }
+
+    /* Metrics1: display title in top-left of first card
+     * Position relative to card: left=28.41px, top=13.26px
+    * Use inter_regular_18 font.
+     */
+    lv_obj_t *title_lbl = lv_label_create(cards[0]);
+    lv_label_set_text(title_lbl, "Current Air Quality");
+    static lv_style_t style_title;
+    lv_style_init(&style_title);
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(title_lbl, &style_title, 0);
+    /* Set position inside the card (use integer pixels) */
+    lv_obj_set_pos(title_lbl, 28, 13);
+
+    /* Add percentage label "89%" below the title, vertically centered
+     * between the title bottom and the card bottom, left-aligned with title.
+     */
+    lv_obj_t *value_lbl = lv_label_create(cards[0]);
+    lv_label_set_text(value_lbl, "98%");
+    static lv_style_t style_value;
+    lv_style_init(&style_value);
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_50);
+    lv_obj_add_style(value_lbl, &style_value, 0);
+    /* Compute vertical placement using known title Y and card height */
+    int title_y = 13;
+    int title_h = lv_obj_get_height(title_lbl);
+    int area_top = title_y + title_h;
+    int area_bottom = card_h; /* card_h computed above */
+    int val_h = lv_obj_get_height(value_lbl);
+    int val_y = (area_top + area_bottom - val_h) / 2;
+    /* Move up by 10 pixels to avoid overflowing the bottom */
+    val_y -= 10;
+    if (val_y < area_top) val_y = area_top + 4;
+    lv_obj_set_pos(value_lbl, 28, val_y);
+}
+
+void lvgl_metrics2_create(lv_obj_t *scr)
+{
+    lv_obj_t *src = scr;
+    lv_obj_set_style_bg_color(src, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(src, LV_OPA_COVER, 0);
+
+    lv_obj_t *rect = lv_obj_create(src);
+    lv_obj_set_size(rect, 320, 480);
+    lv_obj_align(rect, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(rect, 1, 0);
+    lv_obj_set_style_border_color(rect, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_style_border_opa(rect, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(rect, 0, 0);
+    lv_obj_set_style_pad_all(rect, 0, 0);
+    lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+
+    /* Four rounded cards filled vertically */
+    static lv_style_t style_card;
+    lv_style_init(&style_card);
+    lv_style_set_radius(&style_card, 12);
+    lv_style_set_bg_color(&style_card, lv_color_hex(0x1A1A1A));
+    lv_style_set_bg_opa(&style_card, LV_OPA_COVER);
+    lv_style_set_border_width(&style_card, 0);
+    lv_style_set_shadow_opa(&style_card, 0);
+
+    const int n = 4;
+    const int card_w = 288;
+    const int card_x = 16;
+    const int card_gap = 8; /* gap between cards */
+    const int card_1_y = 16; /* top padding inside 320x480 */
+    int card_h = (480 - 32 - (n - 1) * card_gap) / n;
+
+    lv_obj_t *cards[n];
+    for (int i = 0; i < n; i++)
+    {
+        lv_obj_t *card = lv_obj_create(rect);
+        lv_obj_remove_style_all(card);
+        lv_obj_add_style(card, &style_card, 0);
+        lv_obj_set_size(card, card_w, card_h);
+        lv_obj_set_pos(card, card_x, card_1_y + i * (card_h + card_gap));
+        cards[i] = card;
+    }
+
+    /* Metrics2: put a centered '2' in the first card */
+    lv_obj_t *lbl2 = lv_label_create(cards[0]);
+    lv_label_set_text(lbl2, "2");
+    static lv_style_t style_num2;
+    lv_style_init(&style_num2);
+    lv_style_set_text_color(&style_num2, lv_color_white());
+    lv_style_set_text_font(&style_num2, &lv_font_montserrat_24);
+    lv_obj_add_style(lbl2, &style_num2, 0);
+    lv_obj_center(lbl2);
 }

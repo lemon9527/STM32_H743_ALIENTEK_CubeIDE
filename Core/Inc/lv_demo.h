@@ -8,8 +8,10 @@
 extern "C" {
 #endif
 
-void lvgl_demo_create(lv_obj_t *scr);
 void lvgl_brightness_create(lv_obj_t *scr);
+void lvgl_filter_create(lv_obj_t *scr);
+void lvgl_metrics1_create(lv_obj_t *scr);
+void lvgl_metrics2_create(lv_obj_t *scr);
 
 #ifdef __cplusplus
 }

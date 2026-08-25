@@ -70,6 +70,8 @@
 #define LV_FONT_MONTSERRAT_24   1
 #define LV_FONT_MONTSERRAT_32   0
 #define LV_FONT_DEFAULT         &lv_font_montserrat_14
+/* Enable compressed fonts (required for LVGL compressed font support) */
+#define LV_USE_FONT_COMPRESSED  1
 
 /*====================
    WIDGETS
@@ -82,6 +84,7 @@
 #define LV_USE_CHECKBOX         1
 #define LV_USE_DROPDOWN         1
 #define LV_USE_IMG              1
+#define LV_USE_PNG              1
 #define LV_USE_LABEL            1
 #define LV_USE_LINE             1
 #define LV_USE_ROLLER           1

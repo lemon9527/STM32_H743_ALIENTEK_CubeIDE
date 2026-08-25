@@ -49,19 +49,17 @@ extern LTDC_HandleTypeDef hltdc;
 
 static uint32_t fb_active = FB_FRONT;
 
-/* LVGL page background colour (RGB565). Change to set PAGE_LVGL background.
- * Examples: 0xFFFF=white, 0x0000=black, 0xF800=red, 0x07E0=green, 0x001F=blue.
+/* Background colour used to fill Layer 1 framebuffers when switching to
+ * Brightness or Animation page (RGB565). 0x0000 = black.
  */
-#define LVGL_BG_COLOR_RGB565 0x0000U
+#define BG_COLOR_RGB565 0x0000U
 
 /* Current page state (default: animation page) */
 volatile PageState_t current_page = PAGE_ANIMATION;
 
-/* Previous button states for falling-edge detection (1 = released, active low) */
-static uint8_t prev_key0 = 1;
-
-/* Previous state for KEY2 falling-edge detection (1 = released, active low) */
-static uint8_t prev_key2 = 1;
+/* Previous button states for edge detection */
+static uint8_t prev_key_up = 0;    /* KEY_UP: active HIGH */
+static uint8_t prev_key_down = 0;  /* KEY_DOWN: active LOW */
 
 /*---------------------------------------------------------------------------
  * Swap LTDC layer to a new framebuffer address (immediate)
@@ -364,13 +362,16 @@ LV_FONT_DECLARE(lv_font_montserrat_24);
 #define LV_FONT (&lv_font_montserrat_24)
 
 /* Roboto Bold 32 for bottom bar sensor numbers (closer to UI design spec) */
-LV_FONT_DECLARE(roboto_bold_32);
+#include "fonts.h"
 
 #include "lv_demo.h"
 
 /* LVGL screen references for page switching (create once, load on switch) */
-static lv_obj_t *lvgl_screen = NULL;
+/* LVGL screen references for page switching (create once, load on switch) */
 static lv_obj_t *brightness_screen = NULL;
+static lv_obj_t *filter_screen = NULL;
+static lv_obj_t *metrics1_screen = NULL;
+static lv_obj_t *metrics2_screen = NULL;
 
 #define FN_X         4
 #define FN_Y         4
@@ -459,7 +460,7 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
                 int px = ly;
                 int py = 479 - lx;
 
-                if (px < 800 && py < 480)
+                if (px >= 0 && px < UI_BUF_STRIDE && py >= 0 && py < LCD_HEIGHT)
                 {
                     /* For anti-aliased (bpp>1), dim the color for edge pixels */
                     if (bpp > 1)
@@ -493,7 +494,7 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
 static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
                                const char *text, uint16_t color)
 {
-    const lv_font_t *font = &roboto_bold_32;
+    const lv_font_t *font = &inter_bold_42;
     uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
 
     /* First pass: calculate total width */
@@ -553,7 +554,7 @@ static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
                 int px = ly;
                 int py = 479 - lx;
 
-                if (px < 800 && py < 480)
+                if (px >= 0 && px < UI_BUF_STRIDE && py >= 0 && py < LCD_HEIGHT)
                 {
                     if (bpp > 1)
                     {
@@ -575,89 +576,7 @@ static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
     }
 }
 
-/*---------------------------------------------------------------------------
- * Switch to LVGL page: pre-fill Layer 2 with opaque black, clear Layer 1
- * animation buffers to black, then load the LVGL screen on top.
- *--------------------------------------------------------------------------
- */
-static void SwitchToLVGLPage(void)
-{
-    /*---------------------------------------------------------------------------
-     * Pre-fill Layer 2 with opaque black BEFORE loading the LVGL screen.
-     * This is the key fix for the "background paint" flash:
-     *
-     * The old behaviour (ClearLayer2_Transparent) cleared Layer 2 to transparent,
-     * then LVGL would render the screen in 480x80 pixel bands. Each band flushed
-     * the background to Layer 2 sequentially, causing the user to see a
-     * visible band-by-band "painting" of the background.
-     *
-     * By pre-filling the entire Layer 2 with opaque black using DMA2D R2M,
-     * the background is instant — the user never sees it being painted.
-     * LVGL then renders widgets on top of the already-black background.
-     * All three pages use black backgrounds, so this avoids any white flash.
-     *---------------------------------------------------------------------------
-     */
-    FillLayer2_OpaqueBlack();
-    hdma2d.Init.Mode         = DMA2D_R2M;
-    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
-    hdma2d.Init.OutputOffset = 0;
-    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
-    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
-    HAL_DMA2D_Init(&hdma2d);
 
-    /* Determine the inactive buffer and fill it first */
-    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
-    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
-
-    HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
-    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
-    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
-
-    /* Now atomically switch LTDC to the fully-initialized buffer */
-    LTDC_Layer1->CFBAR = inactive_fb;
-    fb_active = inactive_fb;
-
-    /* Fill the now-inactive (previously active) buffer so both are initialized */
-    HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
-    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
-    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
-
-    /* Ensure LVGL demo screen is created (once) and loaded.
-     * Using separate screens avoids the race condition and memory corruption
-     * caused by lv_obj_clean() + recreate on rapid page switches.
-     *
-     * NOTE: We do NOT disable Layer 2 or call lv_refr_now(NULL) here.
-     * Since current_page is set at the end of this function, the default
-     * task's lv_task_handler() does NOT run during the switch. The LVGL
-     * task handler will incrementally render dirty areas after the switch
-     * completes (~5ms per band, 6 bands total). The black background from
-     * FillLayer2_OpaqueBlack() fills the gap, so no visible artifacts.
-     *
-     * This approach is much faster than the old Layer 2 disable/enable
-     * protocol which required a 20ms VSYNC wait + full LVGL render.
-     */
-    if (lv_is_initialized()) {
-        if (lvgl_screen == NULL) {
-            lvgl_screen = lv_obj_create(NULL);
-            lvgl_demo_create(lvgl_screen);
-        }
-        lv_scr_load(lvgl_screen);
-        /* Explicitly invalidate the screen to force re-render.
-         * CRITICAL: When switching away from an LVGL page (e.g. to Animation)
-         * and back, lv_scr_load() detects that the screen is already the
-         * active screen (disp->act_scr == scr) and returns early WITHOUT
-         * calling lv_obj_invalidate(). Without this explicit invalidation,
-         * the LVGL task handler skips rendering, and Layer 2 shows black
-         * (from FillLayer2_OpaqueBlack()).
-         */
-        lv_obj_invalidate(lvgl_screen);
-    }
-
-    printf("PAGE: switched to LVGL\r\n");
-    current_page = PAGE_LVGL;
-}
 
 /*---------------------------------------------------------------------------
  * Switch back to animation page: restore UI overlays on Layer 2
@@ -705,13 +624,13 @@ static void SwitchToAnimationPage(void)
 }
 
 /*---------------------------------------------------------------------------
- * Switch to Brightness page: same as LVGL page but with "Brightness" text
+ * Switch to Brightness page
  *---------------------------------------------------------------------------
  */
 static void SwitchToBrightnessPage(void)
 {
     /*---------------------------------------------------------------------------
-     * Same fix as SwitchToLVGLPage: pre-fill Layer 2 with opaque black before
+     * Pre-fill Layer 2 with opaque black before
      * loading the LVGL screen, preventing the band-by-band background paint
      * flash. All three pages use black backgrounds, so no white flash.
      *---------------------------------------------------------------------------
@@ -734,7 +653,7 @@ static void SwitchToBrightnessPage(void)
     uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
 
     HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 100);
     SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
@@ -742,12 +661,12 @@ static void SwitchToBrightnessPage(void)
     fb_active = inactive_fb;
 
     HAL_DMA2D_Abort(&hdma2d);
-    HAL_DMA2D_Start(&hdma2d, LVGL_BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
     HAL_DMA2D_PollForTransfer(&hdma2d, 100);
     SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
 
     /* Set up Brightness LVGL screen (create once, load on switch)
-     * Same approach as SwitchToLVGLPage: no Layer 2 disable/enable,
+     * Same approach as Animation page: no Layer 2 disable/enable,
      * no lv_refr_now(NULL), let the LVGL task handler render naturally.
      */
     if (lv_is_initialized()) {
@@ -756,15 +675,151 @@ static void SwitchToBrightnessPage(void)
             lvgl_brightness_create(brightness_screen);
         }
         lv_scr_load(brightness_screen);
-        /* Same critical invalidation as SwitchToLVGLPage: without this,
-         * lv_scr_load() may return early if the screen is already active,
-         * and the LVGL task handler won't re-render.
+        /* Critical invalidation: without this, lv_scr_load() may return early
+         * if the screen is already active, and the LVGL task handler won't
+         * re-render.
          */
         lv_obj_invalidate(brightness_screen);
     }
 
     printf("PAGE: switched to Brightness\r\n");
     current_page = PAGE_BRIGHTNESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Switch to Filter page
+ *--------------------------------------------------------------------------*/
+static void SwitchToFilterPage(void)
+{
+    FillLayer2_OpaqueBlack();
+
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+
+    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
+    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    LTDC_Layer1->CFBAR = inactive_fb;
+    fb_active = inactive_fb;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    if (lv_is_initialized()) {
+        if (filter_screen == NULL) {
+            filter_screen = lv_obj_create(NULL);
+            lvgl_filter_create(filter_screen);
+        }
+        lv_scr_load(filter_screen);
+        lv_obj_invalidate(filter_screen);
+        /* Force immediate LVGL refresh and sync D-Cache so DMA2D/LTDC see pixels */
+        lv_refr_now(NULL);
+        SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
+    }
+
+    printf("PAGE: switched to Filter\r\n");
+    current_page = PAGE_FILTER;
+}
+
+/*---------------------------------------------------------------------------
+ * Switch to Metrics page (Main Screen secondary)
+ *--------------------------------------------------------------------------*/
+static void SwitchToMetrics1Page(void)
+{
+    FillLayer2_OpaqueBlack();
+
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+
+    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
+    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    LTDC_Layer1->CFBAR = inactive_fb;
+    fb_active = inactive_fb;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    if (lv_is_initialized()) {
+        if (metrics1_screen == NULL) {
+            metrics1_screen = lv_obj_create(NULL);
+            lvgl_metrics1_create(metrics1_screen);
+        }
+        lv_scr_load(metrics1_screen);
+        lv_obj_invalidate(metrics1_screen);
+        lv_refr_now(NULL);
+        SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
+    }
+
+    printf("PAGE: switched to Metrics1\r\n");
+    current_page = PAGE_METRICS1;
+}
+
+/*---------------------------------------------------------------------------
+ * Switch to Metrics2 page
+ *--------------------------------------------------------------------------*/
+static void SwitchToMetrics2Page(void)
+{
+    FillLayer2_OpaqueBlack();
+
+    hdma2d.Init.Mode         = DMA2D_R2M;
+    hdma2d.Init.ColorMode    = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    hdma2d.Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d.Init.RedBlueSwap   = DMA2D_RB_REGULAR;
+    HAL_DMA2D_Init(&hdma2d);
+
+    uint32_t inactive_fb = (fb_active == FB_FRONT) ? FB_BACK : FB_FRONT;
+    uint32_t other_fb = (inactive_fb == FB_FRONT) ? FB_BACK : FB_FRONT;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, inactive_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)inactive_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    LTDC_Layer1->CFBAR = inactive_fb;
+    fb_active = inactive_fb;
+
+    HAL_DMA2D_Abort(&hdma2d);
+    HAL_DMA2D_Start(&hdma2d, BG_COLOR_RGB565, other_fb, LCD_FB_STRIDE, 480);
+    HAL_DMA2D_PollForTransfer(&hdma2d, 100);
+    SCB_CleanDCache_by_Addr((uint32_t *)other_fb, LCD_FB_STRIDE * LCD_HEIGHT * sizeof(uint16_t));
+
+    if (lv_is_initialized()) {
+        if (metrics2_screen == NULL) {
+            metrics2_screen = lv_obj_create(NULL);
+            lvgl_metrics2_create(metrics2_screen);
+        }
+        lv_scr_load(metrics2_screen);
+        lv_obj_invalidate(metrics2_screen);
+        lv_refr_now(NULL);
+        SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
+    }
+
+    printf("PAGE: switched to Metrics2\r\n");
+    current_page = PAGE_METRICS2;
 }
 
 /*---------------------------------------------------------------------------
@@ -908,13 +963,21 @@ void StartAnimationTask(void *argument)
      *---------------------------------------------------------------------------
      */
     if (lv_is_initialized()) {
-        if (lvgl_screen == NULL) {
-            lvgl_screen = lv_obj_create(NULL);
-            lvgl_demo_create(lvgl_screen);
-        }
         if (brightness_screen == NULL) {
             brightness_screen = lv_obj_create(NULL);
             lvgl_brightness_create(brightness_screen);
+        }
+        if (filter_screen == NULL) {
+            filter_screen = lv_obj_create(NULL);
+            lvgl_filter_create(filter_screen);
+        }
+        if (metrics1_screen == NULL) {
+            metrics1_screen = lv_obj_create(NULL);
+            lvgl_metrics1_create(metrics1_screen);
+        }
+        if (metrics2_screen == NULL) {
+            metrics2_screen = lv_obj_create(NULL);
+            lvgl_metrics2_create(metrics2_screen);
         }
     }
 
@@ -923,56 +986,58 @@ void StartAnimationTask(void *argument)
         /* Wait for 50ms timer to signal next frame */
         osSemaphoreAcquire(anim_sem_id, osWaitForever);
 
-        /*---------------------------------------------------------------------------
-         * Poll KEY0 and KEY2 for page cycling (50ms debounce, falling edge)
-         * KEY0 = PH3, KEY2 = PH2, both active low
-         * KEY2 = previous page, KEY0 = next page, 3-page circular loop
-         *---------------------------------------------------------------------------
+        /*--------------------------------------------------------------------
+         * Poll KEY_UP (Screen Button) and KEY_DOWN (Option Button)
+         * KEY_UP  = PA0 -> active HIGH
+         * KEY_DOWN= PH2 -> active LOW
+         * - KEY_UP cycles main pages: Animation -> Filter -> Brightness
+         * - KEY_DOWN when on Animation switches to Metrics (secondary page)
+         *   KEY_DOWN on Brightness is handled by LVGL event handler.
+         *--------------------------------------------------------------------
          */
         {
-            uint8_t key0 = (HAL_GPIO_ReadPin(KEY0_GPIO_Port, KEY0_Pin) == GPIO_PIN_RESET) ? 0 : 1;
-            uint8_t key2 = (HAL_GPIO_ReadPin(KEY2_GPIO_Port, KEY2_Pin) == GPIO_PIN_RESET) ? 0 : 1;
+            uint8_t key_up = (HAL_GPIO_ReadPin(KEY_UP_GPIO_Port, KEY_UP_Pin) == GPIO_PIN_SET) ? 1 : 0;
+            uint8_t key_down = (HAL_GPIO_ReadPin(KEY_DOWN_GPIO_Port, KEY_DOWN_Pin) == GPIO_PIN_RESET) ? 1 : 0;
 
-            /* Debug: log key state changes */
-            if (key0 != prev_key0 || key2 != prev_key2)
-            {
-                printf("DEBUG_KEYS: key0=%d key2=%d\r\n", key0, key2);
+            if (key_up != prev_key_up || key_down != prev_key_down) {
+                printf("DEBUG_KEYS: key_up=%d key_down=%d\r\n", key_up, key_down);
             }
 
-            /* KEY0 falling edge: advance to next page (0→1→2→0→...)
-             * NOTE: current_page is NOT set here. It is set at the end of
-             * each switch function (SwitchToLVGLPage, SwitchToBrightnessPage,
-             * SwitchToAnimationPage). This prevents the defaultTask from
-             * calling lv_task_handler() during the switch, which would
-             * concurrently access LVGL data structures with lv_refr_now(NULL)
-             * inside the switch function, causing a race condition that
-             * manifests as a diagonal white screen scroll or a system hang.
-             */
-            if (prev_key0 == 1 && key0 == 0)
+            /* Screen Button: KEY_DOWN press (active low -> key_down==1) -> advance among main pages */
+            if (prev_key_down == 0 && key_down == 1)
             {
-                PageState_t next = (current_page + 1) % 3;
-                switch (next) {
-                    case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
-                    case PAGE_LVGL:       SwitchToLVGLPage();       break;
-                    case PAGE_BRIGHTNESS: SwitchToBrightnessPage(); break;
+                PageState_t base = current_page;
+                if (base == PAGE_METRICS1 || base == PAGE_METRICS2) base = PAGE_ANIMATION; /* treat metrics as main=animation */
+
+                if (base == PAGE_ANIMATION)       SwitchToFilterPage();
+                else if (base == PAGE_FILTER)     SwitchToBrightnessPage();
+                else if (base == PAGE_BRIGHTNESS) SwitchToAnimationPage();
+            }
+
+            /* Option Button: KEY_UP press (rising edge) when on Animation -> Metrics
+             * Other pages should handle KEY_UP via LVGL event handlers. */
+            if (prev_key_up == 0 && key_up == 1)
+            {
+                if (current_page == PAGE_ANIMATION)
+                {
+                    /* Animation -> Metrics1 */
+                    SwitchToMetrics1Page();
                 }
-            }
-
-            /* KEY2 falling edge: go to previous page (0→2→1→0→...) */
-            if (prev_key2 == 1 && key2 == 0)
-            {
-                PageState_t prev = (current_page + 2) % 3;  /* -1 mod 3 */
-                switch (prev) {
-                    case PAGE_ANIMATION:  SwitchToAnimationPage();  break;
-                    case PAGE_LVGL:       SwitchToLVGLPage();       break;
-                    case PAGE_BRIGHTNESS: SwitchToBrightnessPage(); break;
+                else if (current_page == PAGE_METRICS1)
+                {
+                    /* Metrics1 -> Metrics2 */
+                    SwitchToMetrics2Page();
                 }
+                else if (current_page == PAGE_METRICS2)
+                {
+                    /* Metrics2 -> Animation */
+                    SwitchToAnimationPage();
+                }
+                /* else: let LVGL handle KEY_UP events on pages that use it */
             }
 
-
-
-            prev_key0 = key0;
-            prev_key2 = key2;
+            prev_key_up = key_up;
+            prev_key_down = key_down;
         }
 
         /* Skip rendering when not on the animation page (keep polling buttons) */

@@ -31,7 +31,6 @@
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
-#include "lv_demo.h"
 #include "animation.h"
 /* USER CODE END Includes */
 
@@ -207,8 +206,8 @@ void StartDefaultTask(void *argument)
       led_tick = 0;
     }
 
-    /* LVGL task handler: call frequently (5ms) when LVGL or Brightness page is active */
-    if (lv_is_initialized() && (current_page == PAGE_LVGL || current_page == PAGE_BRIGHTNESS))
+    /* LVGL task handler: call frequently (5ms) when Brightness page is active */
+    if (lv_is_initialized() && current_page == PAGE_BRIGHTNESS)
     {
       lv_task_handler();
     }
@@ -230,4 +229,3 @@ void LVTickCallback(void *argument)
 }
 
 /* USER CODE END Application */
-
