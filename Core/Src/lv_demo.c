@@ -5,8 +5,31 @@
 #include "icon_resource/brightness_icons.h"
 #include "icon_resource/air_quality_icons.h"
 #include "fonts.h"
+#include <stdio.h>
 
 /* Demo helper removed: lvgl_demo_create is unused. */
+
+/*---------------------------------------------------------------------------
+ * Metrics1 value labels (updated by lvgl_metrics1_update)
+ *---------------------------------------------------------------------------*/
+static lv_obj_t *m1_air_index_lbl = NULL;   /* Card 0: Air Index value */
+static lv_obj_t *m1_pm25_val_lbl = NULL;     /* Card 1: PM2.5 value */
+static lv_obj_t *m1_pm25_unit_lbl = NULL;    /* Card 1: PM2.5 unit */
+static lv_obj_t *m1_tvoc_val_lbl = NULL;     /* Card 2: TVOC value */
+static lv_obj_t *m1_tvoc_unit_lbl = NULL;    /* Card 2: TVOC unit */
+static lv_obj_t *m1_co2_val_lbl = NULL;      /* Card 3: CO2 value */
+static lv_obj_t *m1_co2_unit_lbl = NULL;     /* Card 3: CO2 unit */
+
+/*---------------------------------------------------------------------------
+ * Metrics2 value labels (updated by lvgl_metrics2_update)
+ *---------------------------------------------------------------------------*/
+static lv_obj_t *m2_air_index_lbl = NULL;   /* Card 0: Air Index value */
+static lv_obj_t *m2_temp_val_lbl = NULL;     /* Card 1: Temperature value */
+static lv_obj_t *m2_temp_unit_lbl = NULL;    /* Card 1: Temperature unit */
+static lv_obj_t *m2_humid_val_lbl = NULL;    /* Card 2: Humidity value */
+static lv_obj_t *m2_humid_unit_lbl = NULL;   /* Card 2: Humidity unit */
+static lv_obj_t *m2_press_val_lbl = NULL;    /* Card 3: Pressure value */
+static lv_obj_t *m2_press_unit_lbl = NULL;   /* Card 3: Pressure unit */
 
 /*---------------------------------------------------------------------------
  * Brightness card selection
@@ -313,10 +336,11 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     /* Set position inside the card (use integer pixels) */
     lv_obj_set_pos(title_lbl, 28, 13);
 
-    /* Add percentage label "98%" below the title, vertically centered
+    /* Add Air Index label below the title, vertically centered
      * between the title bottom and the card bottom, left-aligned with title.
      */
     lv_obj_t *value_lbl = lv_label_create(cards[0]);
+    m1_air_index_lbl = value_lbl;
     lv_label_set_text(value_lbl, "98%");
     static lv_style_t style_value;
     lv_style_init(&style_value);
@@ -353,6 +377,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
      * PM 2.5 unit use inter_regular_17 font, positioned right after value with 4px gap.
     */
     lv_obj_t *value_lbl2 = lv_label_create(cards[1]);
+    m1_pm25_val_lbl = value_lbl2;
     lv_label_set_text(value_lbl2, "12");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -365,6 +390,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
      * vertically aligned by baseline (bottom of unit = bottom of value).
      */
     lv_obj_t *unit_lbl2 = lv_label_create(cards[1]);
+    m1_pm25_unit_lbl = unit_lbl2;
     lv_label_set_text(unit_lbl2, "ug/m³");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
@@ -388,6 +414,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     lv_obj_set_pos(title_lbl3, 28, 17);
 
     lv_obj_t *value_lbl3 = lv_label_create(cards[2]);
+    m1_tvoc_val_lbl = value_lbl3;
     lv_label_set_text(value_lbl3, "115");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -397,6 +424,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     lv_obj_set_pos(value_lbl3, val3_x, val3_y);
 
     lv_obj_t *unit_lbl3 = lv_label_create(cards[2]);
+    m1_tvoc_unit_lbl = unit_lbl3;
     lv_label_set_text(unit_lbl3, "ppb");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
@@ -417,6 +445,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     lv_obj_set_pos(title_lbl4, 28, 17);
 
     lv_obj_t *value_lbl4 = lv_label_create(cards[3]);
+    m1_co2_val_lbl = value_lbl4;
     lv_label_set_text(value_lbl4, "500");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -426,6 +455,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     lv_obj_set_pos(value_lbl4, val4_x, val4_y);
 
     lv_obj_t *unit_lbl4 = lv_label_create(cards[3]);
+    m1_co2_unit_lbl = unit_lbl4;
     lv_label_set_text(unit_lbl4, "ppm");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
@@ -436,6 +466,65 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     int unit4_x = val4_x + val4_w + 8;
     int unit4_y = (val4_y + val4_h) - unit4_h - 6;
     lv_obj_set_pos(unit_lbl4, unit4_x, unit4_y);
+}
+
+/*---------------------------------------------------------------------------
+ * lvgl_metrics1_update — update Metrics1 labels from sensor data
+ *---------------------------------------------------------------------------*/
+void lvgl_metrics1_update(const sensor_data_t *data)
+{
+    if (!data) return;
+
+    /* Card 0: Air Index */
+    if (m1_air_index_lbl)
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%u%%", (unsigned)data->air_index);
+        lv_label_set_text(m1_air_index_lbl, buf);
+    }
+
+    /* Card 1: PM2.5 value + reposition unit */
+    if (m1_pm25_val_lbl && m1_pm25_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->pm2_5);
+        lv_label_set_text(m1_pm25_val_lbl, buf);
+        /* Reposition unit label after value */
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m1_pm25_unit_lbl, unit_x, unit_y);
+    }
+
+    /* Card 2: TVOC value + reposition unit */
+    if (m1_tvoc_val_lbl && m1_tvoc_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->tvoc);
+        lv_label_set_text(m1_tvoc_val_lbl, buf);
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m1_tvoc_unit_lbl, unit_x, unit_y);
+    }
+
+    /* Card 3: CO2 value + reposition unit */
+    if (m1_co2_val_lbl && m1_co2_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->co2);
+        lv_label_set_text(m1_co2_val_lbl, buf);
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m1_co2_unit_lbl, unit_x, unit_y);
+    }
 }
 
 void lvgl_metrics2_create(lv_obj_t *scr)
@@ -497,6 +586,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(title_lbl, 28, 13);
 
     lv_obj_t *value_lbl = lv_label_create(cards[0]);
+    m2_air_index_lbl = value_lbl;
     lv_label_set_text(value_lbl, "98%");
     static lv_style_t style_value;
     lv_style_init(&style_value);
@@ -554,6 +644,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(t1, 28, 17);
 
     lv_obj_t *v1 = lv_label_create(cards[1]);
+    m2_temp_val_lbl = v1;
     lv_label_set_text(v1, "21");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -563,6 +654,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(v1, v1_x, v1_y);
 
     lv_obj_t *u1 = lv_label_create(cards[1]);
+    m2_temp_unit_lbl = u1;
     lv_label_set_text(u1, "°C");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
@@ -586,6 +678,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(t2, 28, 17);
 
     lv_obj_t *v2 = lv_label_create(cards[2]);
+    m2_humid_val_lbl = v2;
     lv_label_set_text(v2, "25");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -595,6 +688,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(v2, v2_x, v2_y);
 
     lv_obj_t *u2 = lv_label_create(cards[2]);
+    m2_humid_unit_lbl = u2;
     lv_label_set_text(u2, "%");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
@@ -618,6 +712,7 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     lv_obj_set_pos(t3, 28, 17);
 
     lv_obj_t *v3 = lv_label_create(cards[3]);
+    m2_press_val_lbl = v3;
     lv_label_set_text(v3, "995");
     lv_style_set_text_color(&style_value, lv_color_white());
     lv_style_set_text_font(&style_value, &inter_bold_42);
@@ -625,4 +720,76 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     int v3_x = 28;
     int v3_y = 46;
     lv_obj_set_pos(v3, v3_x, v3_y);
+
+    /* Unit label for Air Pressure (hPa) */
+    lv_obj_t *u3 = lv_label_create(cards[3]);
+    m2_press_unit_lbl = u3;
+    lv_label_set_text(u3, "hPa");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(u3, &style_title, 0);
+    int v3_w = lv_txt_get_width("995", 4, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int v3_h = lv_font_get_line_height(&inter_bold_42);
+    int u3_h = lv_font_get_line_height(&inter_regular_17);
+    int u3_x = v3_x + v3_w + 8;
+    int u3_y = (v3_y + v3_h) - u3_h - 6;
+    lv_obj_set_pos(u3, u3_x, u3_y);
+}
+
+/*---------------------------------------------------------------------------
+ * lvgl_metrics2_update — update Metrics2 labels from sensor data
+ *---------------------------------------------------------------------------*/
+void lvgl_metrics2_update(const sensor_data_t *data)
+{
+    if (!data) return;
+
+    /* Card 0: Air Index */
+    if (m2_air_index_lbl)
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%u%%", (unsigned)data->air_index);
+        lv_label_set_text(m2_air_index_lbl, buf);
+    }
+
+    /* Card 1: Temperature value + reposition unit */
+    if (m2_temp_val_lbl && m2_temp_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->temperature);
+        lv_label_set_text(m2_temp_val_lbl, buf);
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m2_temp_unit_lbl, unit_x, unit_y);
+    }
+
+    /* Card 2: Humidity value + reposition unit */
+    if (m2_humid_val_lbl && m2_humid_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->humidity);
+        lv_label_set_text(m2_humid_val_lbl, buf);
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m2_humid_unit_lbl, unit_x, unit_y);
+    }
+
+    /* Card 3: Pressure value + reposition unit */
+    if (m2_press_val_lbl && m2_press_unit_lbl)
+    {
+        char buf[16];
+        int len = snprintf(buf, sizeof(buf), "%u", (unsigned)data->pressure);
+        lv_label_set_text(m2_press_val_lbl, buf);
+        int val_w = lv_txt_get_width(buf, len, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+        int val_h = lv_font_get_line_height(&inter_bold_42);
+        int unit_h = lv_font_get_line_height(&inter_regular_17);
+        int unit_x = 28 + val_w + 8;
+        int unit_y = (46 + val_h) - unit_h - 6;
+        lv_obj_set_pos(m2_press_unit_lbl, unit_x, unit_y);
+    }
 }

@@ -65,7 +65,7 @@ checksum = sum(所有 checksum 之前的字节) & 0xFFFF
 
 Checksum 字段同样为大端序，例如 `02 C6` 表示 `0x02C6`。
 
-## 示例数据
+## 示例数据 1
 
 ```
 44 4D 00 26 00 05 00 00 00 00 04 00 00 00 00 00 32 32 32 32 00 00 01 64 02 26 00 09 00 20 00 00 03 84 00 01 00 00 00 00 02 C6
@@ -105,6 +105,47 @@ Checksum 字段同样为大端序，例如 `02 C6` 表示 `0x02C6`。
 | Reserved | 00 | 0 |
 | Sys Error Code | 00 | 0 |
 | Checksum | 02 C6 | ✓ (sum = 0x02C6) |
+
+## 示例数据 2
+```
+44 4D 00 26 00 2D 00 00 00 00 04 00 00 00 00 00 32 32 32 32 00 00 01 59 01 F3 00 63 00 18 00 37 03 84 00 01 00 00 00 00 04 38
+```
+
+### 解析结果
+
+| 字段 | 原始值 | 解析值 |
+|------|--------|--------|
+| Start | 44 4D | ✓ |
+| Frame Length | 00 26 | 38 |
+| PM2.5 | 00 2D | 45 |
+| PM10 | 00 00 | 0 |
+| PM0.3 | 00 00 | 0 |
+| Model Type | 04 | 4 |
+| Machine Mode | 00 | 0 |
+| Reserved | 00 00 | 0 |
+| Left Filter Type | 00 | 0 |
+| Right Filter Type | 00 | 0 |
+| Left HEPA Life | 32 | 50 |
+| Left Carbon Life | 32 | 50 |
+| Right HEPA Life | 32 | 50 |
+| Right Carbon Life | 32 | 50 |
+| VOC Level | 00 | 0 |
+| Screen State | 00 | 0 |
+| Door State | 01 | 1 |
+| Air Index | 59 | 89 |
+| CO2 | 01 F3 | 499 |
+| TVOC | 00 63 | 99 |
+| Temperature | 00 18 | 24 |
+| Humidity | 00 37 | 55 |
+| Pressure | 03 84 | 900 |
+| Connection Type | 00 | 0 |
+| Lightsensor State | 01 | 1 |
+| Brightness Mode | 00 | 0 |
+| Lightsensor Level | 00 | 0 |
+| Reserved | 00 | 0 |
+| Sys Error Code | 00 | 0 |
+| Checksum | 04 38 | ✓ (sum = 0x0438)
+
 
 ## 时序
 

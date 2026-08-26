@@ -33,6 +33,7 @@
 #include "lv_port_indev.h"
 #include "animation.h"
 #include "uart_protocol.h"
+#include "lv_demo.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -211,8 +212,8 @@ void StartDefaultTask(void *argument)
       led_tick = 0;
     }
 
-    /* LVGL task handler: call frequently (5ms) when Brightness page is active */
-    if (lv_is_initialized() && current_page == PAGE_BRIGHTNESS)
+    /* LVGL task handler: call frequently (5ms) when any LVGL page is active */
+    if (lv_is_initialized() && current_page != PAGE_ANIMATION)
     {
       lv_task_handler();
     }
@@ -235,6 +236,24 @@ void StartDefaultTask(void *argument)
                        cur_irq, g_uart1_rb_overflow,
                        uart_rb_available(&g_uart_rb));
                 last_irq = cur_irq;
+            }
+        }
+    }
+
+    /* Update Metrics pages with sensor data every 500ms */
+    {
+        static uint32_t sensor_tick = 0;
+        static sensor_data_t sensor_data;
+        sensor_tick++;
+        if (sensor_tick >= 100)  /* 100 * 5ms = 500ms */
+        {
+            sensor_tick = 0;
+            if (uart_protocol_has_data())
+            {
+                uart_protocol_get_data(&sensor_data);
+                /* Update both Metrics pages so data is ready when user switches to them */
+                lvgl_metrics1_update(&sensor_data);
+                lvgl_metrics2_update(&sensor_data);
             }
         }
     }
