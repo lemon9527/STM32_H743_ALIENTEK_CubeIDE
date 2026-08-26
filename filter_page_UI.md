@@ -83,11 +83,12 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 │             └────────┘           │
 │                                  │
 │                                  │
-│                                  │
 │              ┌──────┐            │
-│              │ 75%  │            │  ← 剩余寿命百分比
-│              └──────┘            │     字体: inter_bold_50 (暂定)
-│                                  │     底部居中, 距底部边距 36px (暂定)
+│              │ 75%  │            │  ← 剩余寿命百分比 (inter_bold_50)
+│              └──────┘            │
+│           ████████░░            │  ← lv_bar 进度条，填充长度 = 寿命 %
+│                                  │     距百分比数字底部若干 px
+│                                  │     底部居中
 └──────────────────────────────────┘
 ```
 
@@ -95,6 +96,9 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 - 根据 `left_filter_type` 选择对应的大 icon
 - 剩余寿命百分比 = `(left_hepa_life + left_carbon_life) / 2` 或显示两者中较低的值（待确认）
 - 使用 `lv_img_set_src()` 设置 icon
+- 使用 `lv_bar_create()` 创建进度条，`lv_bar_set_value()` 设置进度值
+- 进度条样式：自定义颜色（如绿色 → 黄色 → 红色随百分比变化），圆角epa_life` 和 `right_carbon_life` 计算
+- 左右各创建一个 `lv_bar`，分别对应左右滤网的剩余寿命
 
 ### 5.2 双 Filter 布局
 
@@ -110,12 +114,12 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 │       │ (左)  │     │ (右)  │      │     左: 根据 left_filter_type 选择
 │       └──────┘     └──────┘      │     右: 根据 right_filter_type 选择
 │                                  │
-│                                  │
 │    ┌──────┐          ┌──────┐    │
 │    │ 75%  │          │ 80%  │    │  ← 左右剩余寿命百分比
-│    └──────┘          └──────┘    │     左: 左滤网寿命
-│                                  │     右: 右滤网寿命
-│                                  │     距底部边距 36px (暂定)
+│    └──────┘          └──────┘    │
+│   ████░░░░          ██████░░░   │  ← 左右各一个 lv_bar 进度条
+│                                  │     左: 对应左滤网剩余寿命
+│                                  │     右: 对应右滤网剩余寿命
 └──────────────────────────────────┘
 ```
 
@@ -124,6 +128,7 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 - 右 icon 根据 `right_filter_type` 选择中 icon
 - 左剩余寿命根据 `left_hepa_life` 和 `left_carbon_life` 计算
 - 右剩余寿命根据 `right_hepa_life` 和 `right_carbon_life` 计算
+- 左右各创建一个 `lv_bar`，分别对应左右滤网的剩余寿命
 
 ---
 
@@ -151,6 +156,7 @@ void lvgl_filter_create(lv_obj_t *scr, const sensor_data_t *data);
 - 根据 `data->model_type` 判断单/双滤网布局
 - 根据 `data->left_filter_type` / `data->right_filter_type` 选择对应 icon
 - 创建剩余寿命百分比标签
+- 创建 `lv_bar` 进度条，设置初始值
 
 ### 7.2 更新函数
 
@@ -159,6 +165,8 @@ void lvgl_filter_update(const sensor_data_t *data);
 ```
 
 - 更新剩余寿命百分比文本
+- 调用 `lv_bar_set_value(bar, life_percent, LV_ANIM_ON)` 更新进度条
+- 根据剩余寿命高低动态调整进度条颜色（如：>60% 绿色，30%~60% 黄色，<30% 红色）
 - 滤网类型和布局在运行中不变化（由硬件型号决定），无需更新
 
 ### 7.3 调用时机
@@ -178,10 +186,12 @@ if (uart_protocol_has_data()) {
 
 ## 8. 所用字体
 
-| 用途 | 字体 |
-|------|------|
+| 用途 | 字体 / 控件 |
+|------|-------------|
 | 标题 "Filter" | `inter_bold_42` |
 | 剩余寿命百分比数字 | `inter_bold_50` (暂定，或根据实际效果调整) |
+| 进度条 | `lv_bar` 控件，自定义配色 |
+| 进度条内部文字（可选） | 若需在条内显示百分比，可使用 `inter_bold_40` 或 `inter_regular_18` |
 
 ---
 
@@ -190,7 +200,7 @@ if (uart_protocol_has_data()) {
 | 文件 | 说明 |
 |------|------|
 | `Core/Src/icon_resource/filter_icons.h` | Filter icon 的 LVGL 图像描述符（已生成） |
-| `Core/Src/lv_demo.c` | Filter Page 的创建和更新函数（待实现） |
+| `Core/Src/lv_demo.c` | Filter Page 的创建和更新函数，含 `lv_bar` 创建和更新逻辑（待实现） |
 | `Core/Inc/lv_demo.h` | 函数声明（待添加） |
 | `Core/Src/freertos.c` | 主循环定时调用更新函数（待修改） |
 
@@ -204,3 +214,7 @@ if (uart_protocol_has_data()) {
 - [ ] 剩余寿命百分比字体大小和样式
 - [ ] 寿命百分比数字与底部边距的精确间距
 - [ ] 双滤网布局中左右 icon 的精确间距
+- [ ] `lv_bar` 进度条的尺寸（宽度、高度）
+- [ ] `lv_bar` 进度条的颜色分段规则（绿色/黄色/红色的阈值）
+- [ ] 进度条与百分比数字的间距
+- [ ] 进度条是否显示百分比文字在条内或条外
