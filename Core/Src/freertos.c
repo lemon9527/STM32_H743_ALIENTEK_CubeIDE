@@ -32,6 +32,7 @@
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
 #include "animation.h"
+#include "uart_protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -195,6 +196,10 @@ void StartDefaultTask(void *argument)
   lv_port_disp_init();
   lv_port_indev_init();
 
+  /* Initialize UART1 protocol (ControlPCB communication) */
+  uart_protocol_init();
+  printf("UART1 protocol started (115200 baud)\r\n");
+
   /* Infinite loop - LED blink + LVGL task handling */
   for(;;)
   {
@@ -210,6 +215,28 @@ void StartDefaultTask(void *argument)
     if (lv_is_initialized() && current_page == PAGE_BRIGHTNESS)
     {
       lv_task_handler();
+    }
+
+    /* Process UART1 protocol data (ring buffer -> frame parser) */
+    uart_protocol_process();
+
+    /* Diagnostic: print UART1 RX stats every 2 seconds */
+    {
+        static uint32_t last_irq = 0;
+        static int diag_tick = 0;
+        diag_tick++;
+        if (diag_tick >= 400)  /* 400 * 5ms = 2s */
+        {
+            diag_tick = 0;
+            uint32_t cur_irq = g_uart1_rx_irq_count;
+            if (cur_irq != last_irq)
+            {
+                printf("[UART1] RX IRQ: %lu, overflow: %lu, rb: %u\r\n",
+                       cur_irq, g_uart1_rb_overflow,
+                       uart_rb_available(&g_uart_rb));
+                last_irq = cur_irq;
+            }
+        }
     }
 
     osDelay(5);

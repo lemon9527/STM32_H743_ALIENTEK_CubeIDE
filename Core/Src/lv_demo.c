@@ -253,7 +253,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
         cards[i] = card;
     }
 
-    /* Place PM2.5 icon on the right side of the second card (cards[1]).
+    /* Place PM2.5/TVOC/CO2 icons on the right side of the each card (cards[1]/[2]/[3]).
      * Right margin from card = 28px, desired display size = 53x53.
      * For the original icon size ~120px, apply zoom ~= 113 (256 * 53 / 120).
      */
@@ -274,7 +274,32 @@ void lvgl_metrics1_create(lv_obj_t *scr)
         lv_obj_move_foreground(pm_img);
     }
 
-    /* Metrics1: display title in top-left of first card
+    {
+        /* Create TVOC image on cards[2], same position/size as PM2.5 */
+        lv_obj_t *tvoc_img = lv_img_create(rect);
+        lv_img_set_src(tvoc_img, &icon_tvoc);
+        int img_w = 53;
+        int img_h = 53;
+        int x = card_x + (card_w - 28 - img_w);
+        int y = card_1_y + 2 * (card_h + card_gap) + (card_h - img_h) / 2;
+        lv_obj_set_pos(tvoc_img, x, y);
+        lv_obj_move_foreground(tvoc_img);
+    }
+
+    {
+        /* Create CO2 image on cards[3], same position/size as PM2.5 */
+        lv_obj_t *co2_img = lv_img_create(rect);
+        lv_img_set_src(co2_img, &icon_co2);
+        int img_w = 53;
+        int img_h = 53;
+        int x = card_x + (card_w - 28 - img_w);
+        int y = card_1_y + 3 * (card_h + card_gap) + (card_h - img_h) / 2;
+        lv_obj_set_pos(co2_img, x, y);
+        lv_obj_move_foreground(co2_img);
+    }
+
+    /** Card 0 Current Air Quality **/
+    /* Metrics1: display title in top-left of card 0
      * Position relative to card: left=28.41px, top=13.26px
     * Use inter_regular_18 font.
      */
@@ -310,7 +335,8 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     if (val_y < area_top) val_y = area_top + 4;
     lv_obj_set_pos(value_lbl, 28, val_y);
 
-    /* Metrics1: display title(PM 2.5) in top-left of second card
+    /** Card 1 PM 2.5 **/
+    /* Metrics1: display title(PM 2.5) in top-left of card 1
      * Position relative to card: left=28.41px, top=13.26px
     * Use inter_regular_18 font.
     */
@@ -352,6 +378,64 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     int unit2_x = val2_x + val2_w + 8;  /* 8px gap between value and unit */
     int unit2_y = (val2_y + val2_h) - unit2_h - 6;  /* align bottom (baseline) - 6px offset */
     lv_obj_set_pos(unit_lbl2, unit2_x, unit2_y);
+
+    /** Card 2 TVOC **/
+    lv_obj_t *title_lbl3 = lv_label_create(cards[2]);
+    lv_label_set_text(title_lbl3, "TVOC");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(title_lbl3, &style_title, 0);
+    lv_obj_set_pos(title_lbl3, 28, 17);
+
+    lv_obj_t *value_lbl3 = lv_label_create(cards[2]);
+    lv_label_set_text(value_lbl3, "115");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(value_lbl3, &style_value, 0);
+    int val3_x = 28;
+    int val3_y = 46;
+    lv_obj_set_pos(value_lbl3, val3_x, val3_y);
+
+    lv_obj_t *unit_lbl3 = lv_label_create(cards[2]);
+    lv_label_set_text(unit_lbl3, "ppb");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(unit_lbl3, &style_title, 0);
+    int val3_w = lv_txt_get_width("115", 4, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int val3_h = lv_font_get_line_height(&inter_bold_42);
+    int unit3_h = lv_font_get_line_height(&inter_regular_17);
+    int unit3_x = val3_x + val3_w + 8;
+    int unit3_y = (val3_y + val3_h) - unit3_h - 6;
+    lv_obj_set_pos(unit_lbl3, unit3_x, unit3_y);
+
+    /** Card 3 CO2 **/
+    lv_obj_t *title_lbl4 = lv_label_create(cards[3]);
+    lv_label_set_text(title_lbl4, "CO2");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(title_lbl4, &style_title, 0);
+    lv_obj_set_pos(title_lbl4, 28, 17);
+
+    lv_obj_t *value_lbl4 = lv_label_create(cards[3]);
+    lv_label_set_text(value_lbl4, "500");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(value_lbl4, &style_value, 0);
+    int val4_x = 28;
+    int val4_y = 46;
+    lv_obj_set_pos(value_lbl4, val4_x, val4_y);
+
+    lv_obj_t *unit_lbl4 = lv_label_create(cards[3]);
+    lv_label_set_text(unit_lbl4, "ppm");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(unit_lbl4, &style_title, 0);
+    int val4_w = lv_txt_get_width("500", 4, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int val4_h = lv_font_get_line_height(&inter_bold_42);
+    int unit4_h = lv_font_get_line_height(&inter_regular_17);
+    int unit4_x = val4_x + val4_w + 8;
+    int unit4_y = (val4_y + val4_h) - unit4_h - 6;
+    lv_obj_set_pos(unit_lbl4, unit4_x, unit4_y);
 }
 
 void lvgl_metrics2_create(lv_obj_t *scr)
@@ -383,8 +467,8 @@ void lvgl_metrics2_create(lv_obj_t *scr)
     const int n = 4;
     const int card_w = 288;
     const int card_x = 16;
-    const int card_gap = 8; /* gap between cards */
-    const int card_1_y = 16; /* top padding inside 320x480 */
+    const int card_gap = 8;
+    const int card_1_y = 16;
     int card_h = (480 - 32 - (n - 1) * card_gap) / n;
 
     lv_obj_t *cards[n];
@@ -398,13 +482,147 @@ void lvgl_metrics2_create(lv_obj_t *scr)
         cards[i] = card;
     }
 
-    /* Metrics2: put a centered '2' in the first card */
-    lv_obj_t *lbl2 = lv_label_create(cards[0]);
-    lv_label_set_text(lbl2, "2");
-    static lv_style_t style_num2;
-    lv_style_init(&style_num2);
-    lv_style_set_text_color(&style_num2, lv_color_white());
-    lv_style_set_text_font(&style_num2, &lv_font_montserrat_24);
-    lv_obj_add_style(lbl2, &style_num2, 0);
-    lv_obj_center(lbl2);
+    /*---------------------------------------------------------------------------
+     * Card 0 — "Current Air Quality"
+     *   Copy of metrics1 card 0 content
+     *---------------------------------------------------------------------------
+     */
+    lv_obj_t *title_lbl = lv_label_create(cards[0]);
+    lv_label_set_text(title_lbl, "Current Air Quality");
+    static lv_style_t style_title;
+    lv_style_init(&style_title);
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(title_lbl, &style_title, 0);
+    lv_obj_set_pos(title_lbl, 28, 13);
+
+    lv_obj_t *value_lbl = lv_label_create(cards[0]);
+    lv_label_set_text(value_lbl, "98%");
+    static lv_style_t style_value;
+    lv_style_init(&style_value);
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_50);
+    lv_obj_add_style(value_lbl, &style_value, 0);
+    int title_y = 13;
+    int title_h = lv_obj_get_height(title_lbl);
+    int area_top = title_y + title_h;
+    int area_bottom = card_h;
+    int val_h = lv_obj_get_height(value_lbl);
+    int val_y = (area_top + area_bottom - val_h) / 2;
+    val_y -= 10;
+    if (val_y < area_top) val_y = area_top + 4;
+    lv_obj_set_pos(value_lbl, 28, val_y);
+
+    /*---------------------------------------------------------------------------
+     * Right-side icons on cards[1]/[2]/[3] — 53x53, same position as metrics1.
+     *---------------------------------------------------------------------------
+     */
+    const int img_w = 53;
+    const int img_h = 53;
+    int icon_x = card_x + (card_w - 28 - img_w);
+
+    /* Card 1 icon: temperature */
+    lv_obj_t *img1 = lv_img_create(rect);
+    lv_img_set_src(img1, &icon_temperature);
+    int y1 = card_1_y + 1 * (card_h + card_gap) + (card_h - img_h) / 2;
+    lv_obj_set_pos(img1, icon_x, y1);
+    lv_obj_move_foreground(img1);
+
+    /* Card 2 icon: humidity */
+    lv_obj_t *img2 = lv_img_create(rect);
+    lv_img_set_src(img2, &icon_humidity);
+    int y2 = card_1_y + 2 * (card_h + card_gap) + (card_h - img_h) / 2;
+    lv_obj_set_pos(img2, icon_x, y2);
+    lv_obj_move_foreground(img2);
+
+    /* Card 3 icon: air pressure */
+    lv_obj_t *img3 = lv_img_create(rect);
+    lv_img_set_src(img3, &icon_air_pressure);
+    int y3 = card_1_y + 3 * (card_h + card_gap) + (card_h - img_h) / 2;
+    lv_obj_set_pos(img3, icon_x, y3);
+    lv_obj_move_foreground(img3);
+
+    /*---------------------------------------------------------------------------
+     * Card 1 — Temperature 21°C
+     *---------------------------------------------------------------------------
+     */
+    lv_obj_t *t1 = lv_label_create(cards[1]);
+    lv_label_set_text(t1, "Temperature");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(t1, &style_title, 0);
+    lv_obj_set_pos(t1, 28, 17);
+
+    lv_obj_t *v1 = lv_label_create(cards[1]);
+    lv_label_set_text(v1, "21");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(v1, &style_value, 0);
+    int v1_x = 28;
+    int v1_y = 46;
+    lv_obj_set_pos(v1, v1_x, v1_y);
+
+    lv_obj_t *u1 = lv_label_create(cards[1]);
+    lv_label_set_text(u1, "°C");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(u1, &style_title, 0);
+    int v1_w = lv_txt_get_width("21", 3, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int v1_h = lv_font_get_line_height(&inter_bold_42);
+    int u1_h = lv_font_get_line_height(&inter_regular_17);
+    int u1_x = v1_x + v1_w + 8;
+    int u1_y = (v1_y + v1_h) - u1_h - 6;
+    lv_obj_set_pos(u1, u1_x, u1_y);
+
+    /*---------------------------------------------------------------------------
+     * Card 2 — Humidity 25%
+     *---------------------------------------------------------------------------
+     */
+    lv_obj_t *t2 = lv_label_create(cards[2]);
+    lv_label_set_text(t2, "Humidity");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(t2, &style_title, 0);
+    lv_obj_set_pos(t2, 28, 17);
+
+    lv_obj_t *v2 = lv_label_create(cards[2]);
+    lv_label_set_text(v2, "25");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(v2, &style_value, 0);
+    int v2_x = 28;
+    int v2_y = 46;
+    lv_obj_set_pos(v2, v2_x, v2_y);
+
+    lv_obj_t *u2 = lv_label_create(cards[2]);
+    lv_label_set_text(u2, "%");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(u2, &style_title, 0);
+    int v2_w = lv_txt_get_width("25", 3, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int v2_h = lv_font_get_line_height(&inter_bold_42);
+    int u2_h = lv_font_get_line_height(&inter_regular_17);
+    int u2_x = v2_x + v2_w + 8;
+    int u2_y = (v2_y + v2_h) - u2_h - 6;
+    lv_obj_set_pos(u2, u2_x, u2_y);
+
+    /*---------------------------------------------------------------------------
+     * Card 3 — Air Pressure 995
+     *---------------------------------------------------------------------------
+     */
+    lv_obj_t *t3 = lv_label_create(cards[3]);
+    lv_label_set_text(t3, "Air Pressure");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(t3, &style_title, 0);
+    lv_obj_set_pos(t3, 28, 17);
+
+    lv_obj_t *v3 = lv_label_create(cards[3]);
+    lv_label_set_text(v3, "995");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(v3, &style_value, 0);
+    int v3_x = 28;
+    int v3_y = 46;
+    lv_obj_set_pos(v3, v3_x, v3_y);
 }
