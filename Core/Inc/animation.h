@@ -86,9 +86,13 @@ typedef enum {
 } PageState_t;
 
 extern volatile PageState_t current_page;
+extern volatile PageState_t g_requested_page;
+extern volatile uint8_t     g_page_switch_pending;
 
 void AnimTimerCallback(void *argument);
 void StartAnimationTask(void *argument);
+void UpdateAnimationSensorNumbers(void);
+void ProcessPageSwitch(void);
 
 #ifdef __cplusplus
 }

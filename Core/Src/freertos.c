@@ -254,9 +254,17 @@ void StartDefaultTask(void *argument)
                 /* Update both Metrics pages so data is ready when user switches to them */
                 lvgl_metrics1_update(&sensor_data);
                 lvgl_metrics2_update(&sensor_data);
+                /* Update animation page sensor numbers in real-time */
+                UpdateAnimationSensorNumbers();
             }
         }
     }
+
+    /* Process page switch requests from the AnimationTask.
+     * All page switches (including LVGL calls like lv_scr_load, lv_refr_now)
+     * must execute on the default task to avoid race conditions with lv_task_handler.
+     */
+    ProcessPageSwitch();
 
     osDelay(5);
   }

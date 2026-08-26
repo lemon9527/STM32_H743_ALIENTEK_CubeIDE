@@ -17,10 +17,10 @@
 #include "dma2d.h"
 #include "gpio.h"
 #include "cmsis_os2.h"
-#include "icon_resource/bottom_bar_icons.h"
 #include <stdio.h>
 #include <string.h>
 #include "stm32h7xx.h"
+#include "uart_protocol.h"
 
 /* Number of frames (read from QSPI Flash at init) */
 static uint32_t num_frames = 0;
@@ -198,6 +198,8 @@ static void FillLayer2_OpaqueBlack(void)
     SCB_InvalidateDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
 }
 
+#include "fonts.h"
+
 /*---------------------------------------------------------------------------
  * Pre-render static overlay elements to LTDC Layer 2 UI buffer
  * Called once at startup. Draws bottom bar icons + clean_text on UI buffer.
@@ -205,81 +207,25 @@ static void FillLayer2_OpaqueBlack(void)
  *---------------------------------------------------------------------------
  */
 static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color);
-static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
-                               const char *text, uint16_t color);
+static void DrawTextAtCenter(uint16_t center_x, uint16_t log_y,
+                             const char *text, const lv_font_t *font,
+                             uint16_t color);
+static void ClearNumberArea(int center_x, int num_top, int h, int w);
 
 /*---------------------------------------------------------------------------
- * Render a single bottom-bar icon on the UI buffer with 90° CW rotation.
- *   icon:   icon descriptor (RGB565 pixel data)
- *   log_x:  logical left edge of the icon (portrait coordinate)
- *   log_y:  logical top edge of the icon (portrait coordinate)
- *   ui_buf: pointer to the UI buffer (ARGB1555)
- *
- * 90° CW rotation: logical (sx, sy) -> physical (log_y + sy, 479 - log_x - sx)
- * Pixels with value 0x0001 (transparent marker) are skipped.
- * Pixel value 0x0000 is actual black (from black-background images), NOT skipped.
+ * Pre-render static overlay elements to LTDC Layer 2 UI buffer
+ * Called once at startup. Draws bottom bar icons + clean_text on UI buffer.
+ * Layer 2 uses ARGB1555 format: alpha=1 for overlay, alpha=0 for transparent.
  *---------------------------------------------------------------------------
  */
-static void DrawIcon(const icon_desc_t *icon, uint16_t log_x, uint16_t log_y,
-                     uint16_t *ui_buf)
-{
-    const uint8_t *src = icon->data;
-    int w = icon->w;
-    int h = icon->h;
-
-    for (int sy = 0; sy < h; sy++)
-    {
-        for (int sx = 0; sx < w; sx++)
-        {
-            /* Read RGB565 (little-endian) */
-            uint16_t pixel = (uint16_t)src[sy * icon->stride + sx * 2]
-                           | ((uint16_t)src[sy * icon->stride + sx * 2 + 1] << 8);
-            /* Skip transparent marker (0x0001) */
-            if (pixel == 0x0001)
-                continue;
-            /* 90° CW rotation: logical (log_x + sx, log_y + sy) -> physical */
-            int px = log_y + sy;
-            int py = 479 - log_x - sx;
-            ui_buf[py * UI_BUF_STRIDE + px] = rgb565_to_argb1555(pixel);
-        }
-    }
-}
-
 static void PreRenderUI(void)
 {
     uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
 
     /*---------------------------------------------------------------------------
-     * Bottom label image — placed at the bottom of the 320x480 rectangular border.
-     *
-     * Rect border logical coordinates: x 80..400, y 160..640.
-     * Image is 320x143 (scaled to width=320), positioned at the bottom edge.
-     *   log_x = 80 (left edge of the rect)
-     *   log_y = 640 - 143 = 497 (bottom of rect - image height)
-     *
-     * The image has been pre-processed to remove the "豆包AI生成" watermark
-     * at the bottom-right corner and the large number in the middle.
+     * Clean text: 140x116 RGB565, 90 deg CCW rotation, full image (with black bg)
      *---------------------------------------------------------------------------
      */
-    DrawIcon(&bottom_label, 80, 497, ui_buf);
-
-    /*---------------------------------------------------------------------------
-     * Bottom bar sensor numbers — Montserrat 32, white, centered under icons.
-     *
-     * Middle space: y=528 (pm25 bottom) to y=570 (ugm3 top), 42px height.
-     * Font: Montserrat 32 (line_height=35, base_line=6, ascender=29, digit ~23px).
-     * Vertically centered: log_y = 531 → glyph extends from y=537 to y=560.
-     *
-     * Horizontal centers (same as bottom bar icons):
-     *   PM2.5 center x = 146, TVOC center x = 239, CO2 center x = 322
-     * Numbers are centered at these positions.
-     *---------------------------------------------------------------------------
-     */
-    DrawNumberAtCenter(146, 554, "1",   0xFFFF);
-    DrawNumberAtCenter(239, 554, "30",  0xFFFF);
-    DrawNumberAtCenter(332, 554, "480", 0xFFFF);
-
-    /* Clean text: 140x116 RGB565, 90 deg CCW rotation, full image (with black bg) */
     const uint16_t *text_rgb = (const uint16_t *)_binary_clean_text_rgb_raw_start;
     for (int sy = 0; sy < OVLY_LOGICAL_H; sy++)
     {
@@ -332,6 +278,72 @@ static void PreRenderUI(void)
     }
 
     /*---------------------------------------------------------------------------
+     * Bottom text: two lines of sensor labels inside the 320x480 rectangle.
+     *   Line 1: "PM 2.5" / "TVOC" / "CO2" — inter_regular_17, white
+     *     PM2.5 center: x = 80+66 = 146, top: y = 480+16 = 496
+     *     TVOC center:  x = 240 (middle of 320px rect), top: y = 496
+     *     CO2 center:   x = 400-69 = 331, top: y = 496
+     *   Line 3: "μg/m³" / "ppb" / "ppm" — inter_regular_17, white
+     *     Same horizontal centers as line 1.
+     *     Text center: y = 640-36 = 604 → top = 604 - line_height/2
+     *---------------------------------------------------------------------------
+     */
+    {
+        const lv_font_t *f = &inter_regular_17;
+        uint16_t col = 0xD294; /* ARGB1555: ~0xA7A7A7 (matches Metrics1 style) */
+        int lh = lv_font_get_line_height(f);
+
+        /* Line 1: PM 2.5, TVOC, CO2 */
+        DrawTextAtCenter(146, 496, "PM 2.5", f, col);
+        DrawTextAtCenter(240, 496, "TVOC",   f, col);
+        DrawTextAtCenter(331, 496, "CO2",    f, col);
+
+        /* Line 2: sensor values (between Line 1 and Line 3) — inter_bold_42, white
+         * Vertically centered: midpoint of Line 1 bottom and Line 3 top.
+         *   Line 1 bottom = 496 + lh
+         *   Line 3 top    = 604 - lh/2
+         *   midpoint = (496 + lh + 604 - lh/2) / 2 = 550 + lh/4
+         *   number top = midpoint - lh_bold42 / 2
+         */
+        {
+            const lv_font_t *f42 = &inter_bold_42;
+            int lh_bold42 = lv_font_get_line_height(f42);
+            int num_top = 550 + lh / 4 - lh_bold42 / 2;
+            uint16_t white = 0xFFFF; /* ARGB1555 white */
+
+            char buf[16];
+            sensor_data_t data;
+            uart_protocol_get_data(&data);
+
+            /* Use default values when data is not yet received (startup) */
+            unsigned pm2_5 = uart_protocol_has_data() ? (unsigned)data.pm2_5 : 12U;
+            unsigned tvoc  = uart_protocol_has_data() ? (unsigned)data.tvoc  : 115U;
+            unsigned co2   = uart_protocol_has_data() ? (unsigned)data.co2   : 500U;
+
+            /* Clear entire number area before drawing to remove any previous
+             * digit remnants (even when the new number is shorter than the old).
+             * 100px width is enough for 3-digit numbers and safe from blue border. */
+            ClearNumberArea(146, num_top, lh_bold42, 100);
+            snprintf(buf, sizeof(buf), "%u", pm2_5);
+            DrawTextAtCenter(146, num_top, buf, f42, white);
+
+            ClearNumberArea(240, num_top, lh_bold42, 100);
+            snprintf(buf, sizeof(buf), "%u", tvoc);
+            DrawTextAtCenter(240, num_top, buf, f42, white);
+
+            ClearNumberArea(331, num_top, lh_bold42, 100);
+            snprintf(buf, sizeof(buf), "%u", co2);
+            DrawTextAtCenter(331, num_top, buf, f42, white);
+        }
+
+        /* Line 3: μg/m³, ppb, ppm (centered vertically at y=604) */
+        int line3_top = 604 - lh / 2;
+        DrawTextAtCenter(146, line3_top, "μg/m³", f, col);
+        DrawTextAtCenter(240, line3_top, "ppb",   f, col);
+        DrawTextAtCenter(331, line3_top, "ppm",   f, col);
+    }
+
+    /*---------------------------------------------------------------------------
      * Three lines centered above the 320px rectangle.
      *   Logical y=70  → "animation demo"
      *   Logical y=102 → "STM32H743IIT6"
@@ -352,6 +364,80 @@ static void PreRenderUI(void)
     SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
 }
 
+/*---------------------------------------------------------------------------
+ * Helper: clear a horizontal strip in the Layer 2 UI buffer (with 90° CCW
+ * rotation) to transparent. Used to erase entire number areas before
+ * redrawing, preventing overlap when number length changes.
+ *   center_x: logical x center of the area to clear
+ *   num_top:  logical y top of the area
+ *   h:        height of the area (line height of the font)
+ *   w:        width of the area (must be wide enough for max digit count)
+ *---------------------------------------------------------------------------
+ */
+static void ClearNumberArea(int center_x, int num_top, int h, int w)
+{
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+    int half = w / 2;
+    for (int row = 0; row < h; row++)
+    {
+        int ly = num_top + row;
+        for (int col = -half; col < half; col++)
+        {
+            int lx = center_x + col;
+            int px = ly;
+            int py = 479 - lx;
+            if (px >= 0 && px < UI_BUF_STRIDE && py >= 0 && py < LCD_HEIGHT)
+                ui_buf[py * UI_BUF_STRIDE + px] = 0x0000;
+        }
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * Update sensor numbers on the animation page (called periodically from
+ * StartDefaultTask when new UART data arrives).
+ * Only re-renders the three number fields (PM2.5, TVOC, CO2) in the
+ * bottom area, keeping all other Layer 2 UI content intact.
+ * Must clean D-Cache after writing so LTDC sees the updated data.
+ *---------------------------------------------------------------------------
+ */
+void UpdateAnimationSensorNumbers(void)
+{
+    /* Only update when animation page is active */
+    if (current_page != PAGE_ANIMATION)
+        return;
+
+    /* Recalculate number position (same logic as PreRenderUI) */
+    const lv_font_t *f = &inter_regular_17;
+    int lh = lv_font_get_line_height(f);
+    const lv_font_t *f42 = &inter_bold_42;
+    int lh_bold42 = lv_font_get_line_height(f42);
+    int num_top = 550 + lh / 4 - lh_bold42 / 2;
+    uint16_t white = 0xFFFF; /* ARGB1555 white */
+
+    /* Clear each number area before drawing to erase any previous digit
+     * remnants. 100px width is enough for 3-digit numbers and safe from
+     * the blue border. */
+    ClearNumberArea(146, num_top, lh_bold42, 100);
+    ClearNumberArea(240, num_top, lh_bold42, 100);
+    ClearNumberArea(331, num_top, lh_bold42, 100);
+
+    char buf[16];
+    sensor_data_t data;
+    uart_protocol_get_data(&data);
+
+    snprintf(buf, sizeof(buf), "%u", (unsigned)data.pm2_5);
+    DrawTextAtCenter(146, num_top, buf, f42, white);
+
+    snprintf(buf, sizeof(buf), "%u", (unsigned)data.tvoc);
+    DrawTextAtCenter(240, num_top, buf, f42, white);
+
+    snprintf(buf, sizeof(buf), "%u", (unsigned)data.co2);
+    DrawTextAtCenter(331, num_top, buf, f42, white);
+
+    /* Clean D-Cache so LTDC reads the updated numbers from SDRAM */
+    SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
+}
+
 /* Font metrics for frame number (8x16 bitmap, 2x scaled) */
 #define FONT_SCALE   2
 #define CHAR_W       (8 * FONT_SCALE)   /* 16 px */
@@ -360,9 +446,6 @@ static void PreRenderUI(void)
 #include "src/font/lv_font.h"
 LV_FONT_DECLARE(lv_font_montserrat_24);
 #define LV_FONT (&lv_font_montserrat_24)
-
-/* Roboto Bold 32 for bottom bar sensor numbers (closer to UI design spec) */
-#include "fonts.h"
 
 #include "lv_demo.h"
 
@@ -491,44 +574,131 @@ static void DrawTextLineCenter(uint16_t log_y, const char *text, uint16_t color)
  *   color:    ARGB1555 color (must have A=1 bit set, e.g. 0xFFFF for white)
  *---------------------------------------------------------------------------
  */
-static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
-                               const char *text, uint16_t color)
-{
-    const lv_font_t *font = &inter_bold_42;
-    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
 
-    /* First pass: calculate total width */
-    int len = strlen(text);
+/*---------------------------------------------------------------------------
+ * Draw a text string centered at a specific logical x position.
+ * Accepts any LVGL font. Supports UTF-8 (handles multi-byte characters like μ).
+ *   center_x: logical x of the text's center (portrait coordinate)
+ *   log_y:    logical y position (top of the text line)
+ *   font:     LVGL font to use (e.g. &inter_regular_18)
+ *   color:    ARGB1555 color (must have A=1 bit set, e.g. 0xFFFF for white)
+ *---------------------------------------------------------------------------
+ */
+static void DrawTextAtCenter(uint16_t center_x, uint16_t log_y,
+                             const char *text, const lv_font_t *font,
+                             uint16_t color)
+{
+    uint16_t *ui_buf = (uint16_t *)UI_BUF_ADDR;
+    const uint8_t *p = (const uint8_t *)text;
+
+    /* First pass: calculate total width (UTF-8 aware) */
     int total_w = 0;
-    for (int i = 0; i < len; i++)
+    while (*p)
     {
+        uint32_t c = 0;
+        int len = 1;
+
+        /* UTF-8 decode: 1-byte (0xxxxxxx), 2-byte (110xxxxx 10xxxxxx), etc. */
+        if ((*p & 0xF0) == 0xF0) {
+            /* 4-byte UTF-8 */
+            c = ((uint32_t)(*p & 0x07) << 18) |
+                ((uint32_t)(*(p+1) & 0x3F) << 12) |
+                ((uint32_t)(*(p+2) & 0x3F) << 6) |
+                ((uint32_t)(*(p+3) & 0x3F));
+            len = 4;
+        } else if ((*p & 0xE0) == 0xE0) {
+            /* 3-byte UTF-8 */
+            c = ((uint32_t)(*p & 0x0F) << 12) |
+                ((uint32_t)(*(p+1) & 0x3F) << 6) |
+                ((uint32_t)(*(p+2) & 0x3F));
+            len = 3;
+        } else if ((*p & 0xC0) == 0xC0) {
+            /* 2-byte UTF-8 (covers μ=0xC2 0xB5, characters up to U+07FF) */
+            c = ((uint32_t)(*p & 0x1F) << 6) |
+                ((uint32_t)(*(p+1) & 0x3F));
+            len = 2;
+        } else {
+            /* 1-byte ASCII */
+            c = (uint32_t)*p;
+            len = 1;
+        }
+
         lv_font_glyph_dsc_t dsc;
-        if (lv_font_get_glyph_dsc(font, &dsc, (uint32_t)(uint8_t)text[i], 0))
+        if (lv_font_get_glyph_dsc(font, &dsc, c, 0))
             total_w += dsc.adv_w;
         else
             total_w += font->line_height / 2;
+
+        p += len;
     }
 
     /* Center at the given position */
     int cursor_x = (int)center_x - total_w / 2;
 
-    /* Second pass: render each glyph */
-    for (int i = 0; i < len; i++)
+    /* Second pass: render each glyph (UTF-8 decode again) */
+    p = (const uint8_t *)text;
+    while (*p)
     {
-        uint32_t letter = (uint32_t)(uint8_t)text[i];
+        uint32_t c = 0;
+        int len = 1;
+
+        if ((*p & 0xF0) == 0xF0) {
+            c = ((uint32_t)(*p & 0x07) << 18) |
+                ((uint32_t)(*(p+1) & 0x3F) << 12) |
+                ((uint32_t)(*(p+2) & 0x3F) << 6) |
+                ((uint32_t)(*(p+3) & 0x3F));
+            len = 4;
+        } else if ((*p & 0xE0) == 0xE0) {
+            c = ((uint32_t)(*p & 0x0F) << 12) |
+                ((uint32_t)(*(p+1) & 0x3F) << 6) |
+                ((uint32_t)(*(p+2) & 0x3F));
+            len = 3;
+        } else if ((*p & 0xC0) == 0xC0) {
+            c = ((uint32_t)(*p & 0x1F) << 6) |
+                ((uint32_t)(*(p+1) & 0x3F));
+            len = 2;
+        } else {
+            c = (uint32_t)*p;
+            len = 1;
+        }
+
         lv_font_glyph_dsc_t dsc;
-        if (!lv_font_get_glyph_dsc(font, &dsc, letter, 0))
+        if (!lv_font_get_glyph_dsc(font, &dsc, c, 0))
         {
             cursor_x += font->line_height / 2;
+            p += len;
             continue;
         }
 
-        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, letter);
-        if (!bmp) continue;
-        int bpp = dsc.bpp;
+        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, c);
+        if (!bmp) {
+            /* Space or other non-bitmap glyph: advance cursor by adv_w */
+            cursor_x += dsc.adv_w;
+            p += len;
+            continue;
+        }
 
+        int bpp = dsc.bpp;
         int gpos_y = log_y + (font->line_height - font->base_line) - dsc.box_h - dsc.ofs_y;
 
+        /* Clear the entire glyph box to transparent (0x0000) before drawing.
+         * This erases any previous glyph remnants at the exact glyph position,
+         * preventing flicker (no separate clear pass) and avoiding accidental
+         * erasure of nearby UI elements like the blue border. */
+        for (int row = 0; row < dsc.box_h; row++)
+        {
+            for (int col = 0; col < dsc.box_w; col++)
+            {
+                int lx = cursor_x + dsc.ofs_x + col;
+                int ly = gpos_y + row;
+                int px = ly;
+                int py = 479 - lx;
+                if (px >= 0 && px < UI_BUF_STRIDE && py >= 0 && py < LCD_HEIGHT)
+                    ui_buf[py * UI_BUF_STRIDE + px] = 0x0000;
+            }
+        }
+
+        /* Now draw the glyph pixels (non-transparent only) */
         for (int row = 0; row < dsc.box_h; row++)
         {
             for (int col = 0; col < dsc.box_w; col++)
@@ -573,10 +743,9 @@ static void DrawNumberAtCenter(uint16_t center_x, uint16_t log_y,
         }
 
         cursor_x += dsc.adv_w;
+        p += len;
     }
 }
-
-
 
 /*---------------------------------------------------------------------------
  * Switch back to animation page: restore UI overlays on Layer 2
@@ -863,6 +1032,40 @@ static void DrawFrameNumberUI(int num)
 }
 
 /*---------------------------------------------------------------------------
+ * Page switch request mechanism
+ *
+ * The AnimationTask handles physical key presses but must NOT call LVGL
+ * functions directly (SwitchTo*), because the default task also calls
+ * lv_task_handler() every 5ms. Both tasks accessing LVGL state causes
+ * race conditions leading to HardFault.
+ *
+ * Instead, AnimationTask sets g_requested_page + g_page_switch_pending,
+ * and the default task calls ProcessPageSwitch() to execute the actual
+ * switch (where LVGL operations are safe).
+ *---------------------------------------------------------------------------
+ */
+volatile PageState_t g_requested_page = PAGE_ANIMATION;
+volatile uint8_t     g_page_switch_pending = 0;
+
+void ProcessPageSwitch(void)
+{
+    if (!g_page_switch_pending)
+        return;
+    g_page_switch_pending = 0;
+
+    /* Classify the current page to determine which switch function to call.
+     * We use the same logic as the AnimationTask key handler. */
+    PageState_t target = g_requested_page;
+
+    /* Handle the case where the request is a main-page cycle */
+    if (target == PAGE_ANIMATION)       SwitchToAnimationPage();
+    else if (target == PAGE_FILTER)     SwitchToFilterPage();
+    else if (target == PAGE_BRIGHTNESS) SwitchToBrightnessPage();
+    else if (target == PAGE_METRICS1)   SwitchToMetrics1Page();
+    else if (target == PAGE_METRICS2)   SwitchToMetrics2Page();
+}
+
+/*---------------------------------------------------------------------------
  * Timer callback (50ms = 20fps)
  *---------------------------------------------------------------------------
  */
@@ -1009,9 +1212,12 @@ void StartAnimationTask(void *argument)
                 PageState_t base = current_page;
                 if (base == PAGE_METRICS1 || base == PAGE_METRICS2) base = PAGE_ANIMATION; /* treat metrics as main=animation */
 
-                if (base == PAGE_ANIMATION)       SwitchToFilterPage();
-                else if (base == PAGE_FILTER)     SwitchToBrightnessPage();
-                else if (base == PAGE_BRIGHTNESS) SwitchToAnimationPage();
+                if (base == PAGE_ANIMATION)
+                    { g_requested_page = PAGE_FILTER;     g_page_switch_pending = 1; }
+                else if (base == PAGE_FILTER)
+                    { g_requested_page = PAGE_BRIGHTNESS; g_page_switch_pending = 1; }
+                else if (base == PAGE_BRIGHTNESS)
+                    { g_requested_page = PAGE_ANIMATION;  g_page_switch_pending = 1; }
             }
 
             /* Option Button: KEY_UP press (rising edge) when on Animation -> Metrics
@@ -1021,17 +1227,17 @@ void StartAnimationTask(void *argument)
                 if (current_page == PAGE_ANIMATION)
                 {
                     /* Animation -> Metrics1 */
-                    SwitchToMetrics1Page();
+                    g_requested_page = PAGE_METRICS1; g_page_switch_pending = 1;
                 }
                 else if (current_page == PAGE_METRICS1)
                 {
                     /* Metrics1 -> Metrics2 */
-                    SwitchToMetrics2Page();
+                    g_requested_page = PAGE_METRICS2; g_page_switch_pending = 1;
                 }
                 else if (current_page == PAGE_METRICS2)
                 {
                     /* Metrics2 -> Animation */
-                    SwitchToAnimationPage();
+                    g_requested_page = PAGE_ANIMATION; g_page_switch_pending = 1;
                 }
                 /* else: let LVGL handle KEY_UP events on pages that use it */
             }

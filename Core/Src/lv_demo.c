@@ -222,9 +222,9 @@ void lvgl_filter_create(lv_obj_t *scr)
     static lv_style_t style_title;
     lv_style_init(&style_title);
     lv_style_set_text_color(&style_title, lv_color_white());
-    lv_style_set_text_font(&style_title, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_title, &inter_bold_40);
     lv_obj_add_style(title, &style_title, 0);
-    lv_obj_set_pos(title, 20, 24);
+    lv_obj_set_pos(title, 24, 24);
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);
 }
 
@@ -391,7 +391,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
      */
     lv_obj_t *unit_lbl2 = lv_label_create(cards[1]);
     m1_pm25_unit_lbl = unit_lbl2;
-    lv_label_set_text(unit_lbl2, "ug/m³");
+    lv_label_set_text(unit_lbl2, "μg/m³");
     lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
     lv_style_set_text_font(&style_title, &inter_regular_17);
     lv_obj_add_style(unit_lbl2, &style_title, 0);
