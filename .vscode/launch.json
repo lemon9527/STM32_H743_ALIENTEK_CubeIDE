@@ -2,21 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Cortex Debug (OpenOCD)",
+      "name": "STM32H743 Flash & Debug",
       "type": "cortex-debug",
       "request": "launch",
       "servertype": "openocd",
       "cwd": "${workspaceRoot}",
       "executable": "${workspaceRoot}/Debug/STM32_H743_ALIENTEK_CubeIDE.elf",
-      "device": "STM32H743xx",
+      "device": "STM32H743",
       "configFiles": [
-        "interface/cmsis-dap.cfg",
+        "interface/stlink.cfg",
         "target/stm32h7x.cfg"
       ],
       "openOCDPath": "/opt/homebrew/bin/openocd",
-      "runToEntryPoint": "main",
-      "svdFile": "",
-      
+      "runToMain": true,
+      "showDevDebugOutput": "none"
     }
   ]
 }

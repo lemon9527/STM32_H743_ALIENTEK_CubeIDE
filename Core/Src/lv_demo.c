@@ -288,7 +288,7 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     /* Set position inside the card (use integer pixels) */
     lv_obj_set_pos(title_lbl, 28, 13);
 
-    /* Add percentage label "89%" below the title, vertically centered
+    /* Add percentage label "98%" below the title, vertically centered
      * between the title bottom and the card bottom, left-aligned with title.
      */
     lv_obj_t *value_lbl = lv_label_create(cards[0]);
@@ -309,6 +309,49 @@ void lvgl_metrics1_create(lv_obj_t *scr)
     val_y -= 10;
     if (val_y < area_top) val_y = area_top + 4;
     lv_obj_set_pos(value_lbl, 28, val_y);
+
+    /* Metrics1: display title(PM 2.5) in top-left of second card
+     * Position relative to card: left=28.41px, top=13.26px
+    * Use inter_regular_18 font.
+    */
+    lv_obj_t *title_lbl2 = lv_label_create(cards[1]);
+    lv_label_set_text(title_lbl2, "PM 2.5");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_18);
+    lv_obj_add_style(title_lbl2, &style_title, 0);
+    /* Set position inside the card (use integer pixels) */
+    lv_obj_set_pos(title_lbl2, 28, 17);
+
+    /* Add PM 2.5 value label below the title, left-aligned with title.
+     * PM 2.5 value use inter_bold_42 font.
+     * PM 2.5 unit use inter_regular_17 font, positioned right after value with 4px gap.
+    */
+    lv_obj_t *value_lbl2 = lv_label_create(cards[1]);
+    lv_label_set_text(value_lbl2, "12");
+    lv_style_set_text_color(&style_value, lv_color_white());
+    lv_style_set_text_font(&style_value, &inter_bold_42);
+    lv_obj_add_style(value_lbl2, &style_value, 0);
+    int val2_x = 28;
+    int val2_y = 46;
+    lv_obj_set_pos(value_lbl2, val2_x, val2_y);
+
+    /* Unit label: positioned right after the value label with 8px gap,
+     * vertically aligned by baseline (bottom of unit = bottom of value).
+     */
+    lv_obj_t *unit_lbl2 = lv_label_create(cards[1]);
+    lv_label_set_text(unit_lbl2, "ug/m³");
+    lv_style_set_text_color(&style_title, lv_color_hex(0xA7A7A7));
+    lv_style_set_text_font(&style_title, &inter_regular_17);
+    lv_obj_add_style(unit_lbl2, &style_title, 0);
+    /* Use lv_txt_get_width() for reliable text width at creation time.
+     * lv_obj_get_width() may return 0 because LVGL hasn't laid out the label yet.
+     */
+    int val2_w = lv_txt_get_width("12", 3, &inter_bold_42, 0, LV_TEXT_FLAG_NONE);
+    int val2_h = lv_font_get_line_height(&inter_bold_42);
+    int unit2_h = lv_font_get_line_height(&inter_regular_17);
+    int unit2_x = val2_x + val2_w + 8;  /* 8px gap between value and unit */
+    int unit2_y = (val2_y + val2_h) - unit2_h - 6;  /* align bottom (baseline) - 6px offset */
+    lv_obj_set_pos(unit_lbl2, unit2_x, unit2_y);
 }
 
 void lvgl_metrics2_create(lv_obj_t *scr)

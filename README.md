@@ -335,7 +335,7 @@ T:NN addr=XXXus CPUrot=XXXus swap=XXXus
 4. 点击 **Open file** 选择 `Debug/STM32_H743_ALIENTEK_CubeIDE.hex`
 5. 点击 **Download** 烧录
 
-### 方式三：stm32flash 串口烧录 (macOS)
+### 方式三：stm32flash 串口烧录 (macOS), 针对正点原子 STM32H743IIT6 开发板，上面有预留的 BOOT0 跳线帽孔及 RESET 按钮
 1. 编译生成 hex 文件（CubeIDE 会自动生成到 `Debug/` 目录）
 2. 开发板 USB-232 口连接到 Mac
 3. BOOT0 跳线帽接 **3.3V**，按 RESET 进入 ISP 模式
@@ -359,66 +359,46 @@ T:NN addr=XXXus CPUrot=XXXus swap=XXXus
 - [ ] LVGL UI 完整集成
 - [ ] ...
 
-## 烧录方式四：pyOCD（CMSIS-DAP，交互式 `load`）
+## 烧录方式四：通过vscode 搭配STLINK进行烧录，无需CubeProgrammer or CubeIDE
+### 前置条件
 
-1. 列出可用探针：
+- **Homebrew** 安装 OpenOCD：`brew install openocd`
+- **VS Code 扩展**：[Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cortex-debug)（`ms-vscode.cortex-debug`）
 
-  ```bash
-  pyocd list
-  ```
+### 配置文件
 
-2. 使用交互式 commander 连接（指定 target 和 probe 的 Unique ID）：
+工程 `.vscode/` 目录下已包含以下配置，无需手动创建：
 
-  ```bash
-  pyocd commander -t stm32h743xx -u 07000001000000000000000000000000a5a5a5a597969908
-  ```
+| 文件 | 作用 |
+|------|------|
+| `.vscode/tasks.json` | 定义 `OpenOCD: Flash ELF` 等烧录任务 |
+| `.vscode/launch.json` | 定义 `STM32H743 Flash & Debug` 调试配置 |
+| `.vscode/settings.json` | 编译器路径、文件监听排除等 |
 
-3. 在 `pyocd>` 提示符下使用 `load` 写入 HEX/ELF：
+### 使用方式
 
-  ```text
-  pyocd> load Debug/STM32_H743_ALIENTEK_CubeIDE.hex
-  ```
+**方式一：一键烧录（推荐）**
 
-4. 常用交互命令：`reset`、`resume`、`halt`、`read32` 等。
+`Cmd + Shift + P` → `Tasks: Run Task` → 选择 `OpenOCD: Flash ELF`
 
-注意事项：
-- `pyocd list` 中显示的板卡名称（例如 `NUCLEO-F103RB`）是探针/适配器的标识，不一定等同当前目标 MCU 描述。
-- 在非交互模式下尝试 `pyocd flash -t ... -u <UID> <file>` 时可能因为 pyOCD 版本、参数或与探针/目标的通信问题而失败；遇到此类错误时可优先使用 `commander` + `load`。
-- 如果在连接时看到 `Invalid coresight component`、`Memory transfer fault` 或 `Connected to STM32H743xx [Lockup]` 等警告/错误，尝试：
-  - 确认目标供电、复位线以及 SWD 连接正确；
-  - 给目标上电重置或断电重连；
-  - 尝试短按 Reset，或通过 `halt`/`reset` 在 `pyocd>` 中清除锁死；
-  - 必要时使用 OpenOCD（参见本仓库的 `OpenOCD` 任务）作为替代烧录方式。
+- 自动先编译（`make -C Debug all`），再通过 OpenOCD 烧录到 STM32H743
+- 烧录完成后自动复位运行
 
-- 不同 pyOCD 版本支持的命令略有差异；若命令不可识别，请用 `pyocd --version` 和 `pyocd --help` 检查可用子命令。
+**方式二：仅烧录（不编译）**
 
-示例（交互式流程复制粘贴）：
+`Cmd + Shift + P` → `Tasks: Run Task` → 选择 `OpenOCD: Flash ELF (No Build)`
 
-```bash
-pyocd list
-pyocd commander -t stm32h743xx -u 07000001000000000000000000000000a5a5a5a597969908
-# 在 pyocd> 提示符下：
-# load Debug/STM32_H743_ALIENTEK_CubeIDE.hex
-# reset
-```
+- 适用于上次编译后未修改代码，跳过编译步骤直接烧录
 
-### 关于 `07000001000000000000000000000000a5a5a5a597969908` 的来源
+**方式三：烧录 + 调试**
 
-- 来源：该长串是探针（probe/适配器）的 Unique ID，由探针固件（例如 DAPLink / CMSIS‑DAP）或 USB 设备的序列号生成，用于在主机上区分多个探针。它通常为适配器侧的标识，而不是目标 MCU 的芯片唯一序列号。
-- 验证探针来源：
+`F5` → 选择 `STM32H743 Flash & Debug`
 
-  ```bash
-  pyocd list -v
-  lsusb -v    # 或使用系统的 USB 信息查看工具，查找对应设备的序列号/厂商字段
-  ```
+- 自动编译、烧录，然后停在 `main()` 入口
+- 支持断点、单步执行、变量监视等完整调试功能
 
-  比对输出即可确认该 UID 对应哪个物理设备（例如开发板或 DAPLink 适配器）。
+### 注意事项
 
-- 读取目标 MCU 本身的唯一 ID（芯片 UID）：连接后在 `pyocd>` 中读取对应的设备唯一 ID 寄存器地址（不同 STM32 系列地址不同，请以数据手册为准）。示例（仅作参考）：
-
-  ```text
-  pyocd> read32 0x1FF1E800 3
-  ```
-
-  - 上例读取 3 个 32-bit 单元并输出；请先查阅所用 MCU 的参考手册确认唯一 ID 的基地址。
-  - 如果需要，我可以为 `STM32H743IIT6` 查找并写入精确的 UID 地址示例并追加到本节。
+1. ST-LINK 通过 USB 连接开发板，确保没有其他程序（如 STM32CubeProgrammer、pyOCD）占用 ST-LINK
+2. 如果遇到 `Error: open failed`，检查 USB 连接或在终端执行 `ls /dev/tty.*` 确认设备存在
+3. 首次烧录后可能需要弹出系统安全提示，允许 `openocd` 访问 USB 设备

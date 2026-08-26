@@ -10,10 +10,9 @@ extern "C" {
 
 /* Declare custom fonts here so sources can include a single header.
  * Add more LV_FONT_DECLARE(...) lines when adding fonts. */
-LV_FONT_DECLARE(inter_regular_14);
+LV_FONT_DECLARE(inter_regular_17);
 LV_FONT_DECLARE(inter_regular_18);
 LV_FONT_DECLARE(inter_bold_42);
-LV_FONT_DECLARE(inter_bold_64);
 LV_FONT_DECLARE(inter_bold_50);
 
 #ifdef __cplusplus

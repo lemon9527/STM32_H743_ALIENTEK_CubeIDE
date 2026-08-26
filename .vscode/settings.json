@@ -1,10 +1,22 @@
 {
   "terminal.integrated.env.osx": {
     "PATH": "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.macosaarch64_1.0.0.202602081740/tools/bin:${env:PATH}"
-  }
-  ,
-  "C_Cpp.intelliSenseEngine": "Default",
-  "C_Cpp.intelliSenseEngineFallback": "Enabled"
+  },
+  /* ===== 关闭 C/C++ IntelliSense 自动索引，降低 CPU 功耗 ===== */
+  "C_Cpp.intelliSenseEngine": "default",
+  "C_Cpp.autocomplete": "default",
+  "C_Cpp.errorSquiggles": "enabled",
+
+  /* ===== 限制文件监听范围，减少大核唤醒 ===== */
+  "files.watcherExclude": {
+    "**/Debug/**": true,
+    "**/Middlewares/**": true,
+    "**/Drivers/**": true,
+    "**/build/**": true,
+    "**/.git/**": true
+  },
+
+  /* ===== 关闭 Git 自动操作 ===== */
+  "git.autofetch": true,
+  "git.enabled": true
 }
-
-
