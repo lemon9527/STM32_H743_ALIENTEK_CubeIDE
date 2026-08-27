@@ -22,6 +22,13 @@ static lv_obj_t *m1_co2_val_lbl = NULL;      /* Card 3: CO2 value */
 static lv_obj_t *m1_co2_unit_lbl = NULL;     /* Card 3: CO2 unit */
 
 /*---------------------------------------------------------------------------
+ * Filter page objects (updated by lvgl_filter_update)
+ *---------------------------------------------------------------------------*/
+static lv_obj_t *filter_life_val_lbl = NULL;   /* Life Remaining percentage value */
+static lv_obj_t *filter_life_bar = NULL;        /* Life Remaining progress bar */
+static int filter_life_percent = 76;            /* Initial default percentage */
+
+/*---------------------------------------------------------------------------
  * Metrics2 value labels (updated by lvgl_metrics2_update)
  *---------------------------------------------------------------------------*/
 static lv_obj_t *m2_air_index_lbl = NULL;   /* Card 0: Air Index value */
@@ -272,16 +279,93 @@ void lvgl_filter_create(lv_obj_t *scr)
     lv_obj_set_pos(life_label, 96, large_icon_y + 179 + 56);
 
     /*---------------------------------------------------------------------------
-     * "76%" value — 左对齐 Life Remaining, inter_bold_42
+     * Life Remaining value — 左对齐 Life Remaining, inter_bold_42
      *---------------------------------------------------------------------------*/
     lv_obj_t *life_val = lv_label_create(rect);
-    lv_label_set_text(life_val, "76%");
+    filter_life_val_lbl = life_val;  /* save for later updates */
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d%%", filter_life_percent);
+        lv_label_set_text(life_val, buf);
+    }
     static lv_style_t style_life_val;
     lv_style_init(&style_life_val);
     lv_style_set_text_color(&style_life_val, lv_color_white());
     lv_style_set_text_font(&style_life_val, &inter_bold_42);
     lv_obj_add_style(life_val, &style_life_val, 0);
-    lv_obj_set_pos(life_val, 96, large_icon_y + 179 + 56 + 16 + 14);
+    lv_obj_set_pos(life_val, 96, large_icon_y + 179 + 56 + 16 + 4);
+
+    /*---------------------------------------------------------------------------
+     * Progress bar — 左对齐 Life Remaining, 宽 128, 高 6, 距 value 底部 14
+     *---------------------------------------------------------------------------*/
+    lv_obj_t *life_bar = lv_bar_create(rect);
+    filter_life_bar = life_bar;  /* save for later updates */
+    lv_obj_set_size(life_bar, 128, 6);
+    lv_bar_set_range(life_bar, 0, 100);
+    lv_bar_set_value(life_bar, filter_life_percent, LV_ANIM_OFF);
+    /* x = 96 (left aligned with Life Remaining) */
+    /* y = life_val bottom + 14 */
+    lv_obj_set_pos(life_bar, 96, large_icon_y + 179 + 56 + 16 + 4 + 42 + 14);
+
+    /* Style the bar background: dark gray rounded */
+    static lv_style_t style_bar_bg;
+    lv_style_init(&style_bar_bg);
+    lv_style_set_bg_color(&style_bar_bg, lv_color_hex(0x333333));
+    lv_style_set_bg_opa(&style_bar_bg, LV_OPA_COVER);
+    lv_style_set_radius(&style_bar_bg, 3);
+    lv_style_set_pad_all(&style_bar_bg, 0);
+    lv_style_set_border_width(&style_bar_bg, 0);
+    lv_obj_add_style(life_bar, &style_bar_bg, LV_PART_MAIN);
+
+    /* Indicator style: radius only, color set dynamically */
+    static lv_style_t style_bar_indicator;
+    lv_style_init(&style_bar_indicator);
+    lv_style_set_bg_opa(&style_bar_indicator, LV_OPA_COVER);
+    lv_style_set_radius(&style_bar_indicator, 3);
+    lv_obj_add_style(life_bar, &style_bar_indicator, LV_PART_INDICATOR);
+
+    /* Set initial indicator color based on default percentage */
+    {
+        lv_color_t c;
+        if (filter_life_percent > 20)
+            c = lv_color_make(98, 150, 212);
+        else if (filter_life_percent > 5)
+            c = lv_color_make(238, 221, 96);
+        else
+            c = lv_color_make(207, 121, 84);
+        lv_obj_set_style_bg_color(life_bar, c, LV_PART_INDICATOR);
+    }
+}
+
+/*---------------------------------------------------------------------------
+ * lvgl_filter_update — update Life Remaining value and progress bar
+ *   Called from main task when filter life data arrives from UART.
+ *   Pass percent (0-100) to update both the label and bar simultaneously.
+ *---------------------------------------------------------------------------*/
+void lvgl_filter_update(int percent)
+{
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    filter_life_percent = percent;
+
+    if (filter_life_val_lbl) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d%%", percent);
+        lv_label_set_text(filter_life_val_lbl, buf);
+    }
+    if (filter_life_bar) {
+        lv_bar_set_value(filter_life_bar, percent, LV_ANIM_OFF);
+
+        /* Update indicator color based on percentage */
+        lv_color_t c;
+        if (percent > 20)
+            c = lv_color_make(98, 150, 212);
+        else if (percent > 5)
+            c = lv_color_make(238, 221, 96);
+        else
+            c = lv_color_make(207, 121, 84);
+        lv_obj_set_style_bg_color(filter_life_bar, c, LV_PART_INDICATOR);
+    }
 }
 
 void lvgl_metrics1_create(lv_obj_t *scr)

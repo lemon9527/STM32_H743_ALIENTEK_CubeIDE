@@ -11,6 +11,7 @@ extern "C" {
 
 void lvgl_brightness_create(lv_obj_t *scr);
 void lvgl_filter_create(lv_obj_t *scr);
+void lvgl_filter_update(int percent);
 void lvgl_metrics1_create(lv_obj_t *scr);
 void lvgl_metrics2_create(lv_obj_t *scr);
 
