@@ -4,6 +4,7 @@
 #include "tim.h"
 #include "icon_resource/brightness_icons.h"
 #include "icon_resource/air_quality_icons.h"
+#include "icon_resource/filter_icons.h"
 #include "fonts.h"
 #include <stdio.h>
 
@@ -215,17 +216,72 @@ void lvgl_filter_create(lv_obj_t *scr)
     lv_obj_set_style_pad_all(rect, 0, 0);
     lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICK_FOCUSABLE);
 
-    /* Title label */
+    /*---------------------------------------------------------------------------
+     * Title "Filter" — 左上角, inter_semi_bold_32, 距左 24, 距顶 24
+     *---------------------------------------------------------------------------*/
     lv_obj_t *title = lv_label_create(rect);
     lv_label_set_text(title, "Filter");
-    /* make title visible on black background */
     static lv_style_t style_title;
     lv_style_init(&style_title);
     lv_style_set_text_color(&style_title, lv_color_white());
-    lv_style_set_text_font(&style_title, &inter_bold_40);
+    lv_style_set_text_font(&style_title, &inter_semi_bold_32);
     lv_obj_add_style(title, &style_title, 0);
     lv_obj_set_pos(title, 24, 24);
-    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);
+
+    /*---------------------------------------------------------------------------
+     * Top-right: mini icon + filter type label (default: Hybrid)
+     *   mini icon:  icon_mini_Hybrid_24_24 (24x24)
+     *               x=205 (left edge from rect left), y=32 (from rect top)
+     *   label:      "Hybrid", inter_regular_17, same baseline as mini icon
+     *               text left = mini icon right + 13 = 205 + 24 + 13 = 242
+     *---------------------------------------------------------------------------*/
+    lv_obj_t *mini_icon = lv_img_create(rect);
+    lv_img_set_src(mini_icon, &icon_mini_Hybrid_24_24);
+    lv_obj_set_pos(mini_icon, 205, 32);
+
+    lv_obj_t *type_label = lv_label_create(rect);
+    lv_label_set_text(type_label, "Hybrid");
+    static lv_style_t style_type_label;
+    lv_style_init(&style_type_label);
+    lv_style_set_text_color(&style_type_label, lv_color_white());
+    lv_style_set_text_font(&style_type_label, &inter_regular_16);
+    lv_obj_add_style(type_label, &style_type_label, 0);
+    /* Align text vertically with mini icon (y offset for centering 16px text in 24px height) */
+    lv_obj_set_pos(type_label, 205 + 24 + 13, 32 + (24 - 16) / 2);
+
+    /*---------------------------------------------------------------------------
+     * Center: large icon (default: Hybrid, 123x179)
+     *   horizontally centered, top = mini_icon top + mini_icon height + 58
+     *---------------------------------------------------------------------------*/
+    lv_obj_t *large_icon = lv_img_create(rect);
+    lv_img_set_src(large_icon, &icon_large_HYBRID_Filter_AMIII_123_179);
+    int large_icon_x = (320 - 123) / 2;
+    int large_icon_y = 32 + 24 + 58;
+    lv_obj_set_pos(large_icon, large_icon_x, large_icon_y);
+
+    /*---------------------------------------------------------------------------
+     * "Life Remaining" label — 距大 icon 底部 56, 距左 96, inter_regular_16
+     *---------------------------------------------------------------------------*/
+    lv_obj_t *life_label = lv_label_create(rect);
+    lv_label_set_text(life_label, "Life Remaining");
+    static lv_style_t style_life_label;
+    lv_style_init(&style_life_label);
+    lv_style_set_text_color(&style_life_label, lv_color_white());
+    lv_style_set_text_font(&style_life_label, &inter_regular_16);
+    lv_obj_add_style(life_label, &style_life_label, 0);
+    lv_obj_set_pos(life_label, 96, large_icon_y + 179 + 56);
+
+    /*---------------------------------------------------------------------------
+     * "76%" value — 左对齐 Life Remaining, inter_bold_42
+     *---------------------------------------------------------------------------*/
+    lv_obj_t *life_val = lv_label_create(rect);
+    lv_label_set_text(life_val, "76%");
+    static lv_style_t style_life_val;
+    lv_style_init(&style_life_val);
+    lv_style_set_text_color(&style_life_val, lv_color_white());
+    lv_style_set_text_font(&style_life_val, &inter_bold_42);
+    lv_obj_add_style(life_val, &style_life_val, 0);
+    lv_obj_set_pos(life_val, 96, large_icon_y + 179 + 56 + 16 + 14);
 }
 
 void lvgl_metrics1_create(lv_obj_t *scr)

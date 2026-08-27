@@ -15,6 +15,9 @@ LV_FONT_DECLARE(inter_regular_18);
 LV_FONT_DECLARE(inter_bold_40);
 LV_FONT_DECLARE(inter_bold_42);
 LV_FONT_DECLARE(inter_bold_50);
+LV_FONT_DECLARE(inter_bold_32);
+LV_FONT_DECLARE(inter_semi_bold_32);
+LV_FONT_DECLARE(inter_regular_16);
 
 #ifdef __cplusplus
 }

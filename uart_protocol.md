@@ -27,11 +27,11 @@ ControlPCB 发送的所有多字节字段均为 **大端序 (Big-Endian, MSB fir
 | PM2.5 | 2 | PM2.5 浓度 (μg/m³) |
 | PM10 | 2 | PM10 浓度 (μg/m³) |
 | PM0.3 | 2 | PM0.3 浓度 (μg/m³) |
-| Model Type | 1 | 设备型号 |
-| Machine Mode | 1 | 运行模式 |
+| Model Type | 1 | 设备型号<br>3 = 单滤网<br>4 = 双滤网 |
+| Machine Mode | 1 | 运行模式 <br>0 = running mode<br> 1 = sleep mode (0x00)<br>|
 | Reserved | 2 | 保留 |
-| Left Filter Type | 1 | 左滤网类型 |
-| Right Filter Type | 1 | 右滤网类型 |
+| Left Filter Type | 1 | 左滤网类型<br>0 = filter missing<br>1 = Standard (HEPA)<br>2 = Carbon<br>3 = Hybrid<br>4 = IAQP |
+| Right Filter Type | 1 | 右滤网类型<br>0 = filter missing<br>1 = Standard (HEPA)<br>2 = Carbon<br>3 = Hybrid<br>4 = IAQP |
 | Left HEPA Life | 1 | 左 HEPA 滤网剩余寿命 |
 | Left Carbon Life | 1 | 左活性炭滤网剩余寿命 |
 | Right HEPA Life | 1 | 右 HEPA 滤网剩余寿命 |

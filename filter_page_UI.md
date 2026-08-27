@@ -30,10 +30,10 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 
 | `model_type` 值 | 含义 | 布局 |
 |:---:|------|------|
-| TBD | 单滤网机型 | 单滤网布局 |
-| TBD | 双滤网机型 | 双滤网布局 |
+| 3 | 单滤网机型 | 单滤网布局 |
+| 4 | 双滤网机型 | 双滤网布局 |
 
-> **TODO**: 待 Control PCB 确认 `model_type` 各枚举值对应的具体含义后补充。
+> 其他值视为未知型号，默认按单滤网布局处理。
 
 ---
 
@@ -55,13 +55,12 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 
 | `left_filter_type` / `right_filter_type` 值 | 滤网类型 | 对应 Icon |
 |:---:|---------|-----------|
-| TBD | Hybrid | 对应 Hybrid 系列 icon |
-| TBD | HEPA | 对应 HEPA 系列 icon |
-| TBD | Carbon | 对应 Carbon 系列 icon |
-| TBD | IAQP | 对应 IAQP 系列 icon |
+| 1 | Standard (HEPA) | 对应 HEPA 系列 icon |
+| 2 | Carbon | 对应 Carbon 系列 icon |
+| 3 | Hybrid | 对应 Hybrid 系列 icon |
+| 4 | IAQP | 对应 IAQP 系列 icon |
+| 0 | filter missing | `icon_filter_missing` |
 | 其他 | 未知/缺失 | `icon_filter_missing` |
-
-> **TODO**: 待 Control PCB 确认 `left_filter_type` / `right_filter_type` 各枚举值后补充。
 
 ---
 
@@ -72,21 +71,21 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 适用于单滤网机型。
 
 ```
-┌──────────────────────────────────┐  ← 320 × 480 矩形框
-│  Filter                          │  ← 标题: inter_bold_42, 距左 24, 距顶 24
-│                                  │
-│                                  │
+┌──────────────────────────────────—┐  ← 320 × 480 矩形框
+│  Filter          -----            │  ← 标题: inter_bold_42, 距左 24, 距顶 24
+│                  小icon  filter类型│
+│                  -----            │
 │                                  │
 │             ┌────────┐           │
-│             │  ICON   │           │  ← 大 icon (如 Hybrid/HEPA/Carbon/IAQP)
-│             │ (大尺寸) │           │     居中显示
+│             │  ICON  │           │  ← 大 icon (如 Hybrid/HEPA/Carbon/IAQP)
+│             │ (大尺寸)│           │     居中显示
 │             └────────┘           │
 │                                  │
 │                                  │
 │              ┌──────┐            │
 │              │ 75%  │            │  ← 剩余寿命百分比 (inter_bold_50)
 │              └──────┘            │
-│           ████████░░            │  ← lv_bar 进度条，填充长度 = 寿命 %
+│           ████████░░             │  ← lv_bar 进度条，填充长度 = 寿命 %
 │                                  │     距百分比数字底部若干 px
 │                                  │     底部居中
 └──────────────────────────────────┘
@@ -110,14 +109,14 @@ Filter Page 根据 Control PCB 通过 UART 协议帧传回的数据，动态显�
 │                                  │
 │                                  │
 │       ┌──────┐     ┌──────┐      │
-│       │ ICON  │     │ ICON  │      │  ← 左右各一个中 icon
-│       │ (左)  │     │ (右)  │      │     左: 根据 left_filter_type 选择
+│       │ ICON │     │ ICON │      │  ← 左右各一个中 icon
+│       │ (左) │     │ (右)  │      │     左: 根据 left_filter_type 选择
 │       └──────┘     └──────┘      │     右: 根据 right_filter_type 选择
 │                                  │
 │    ┌──────┐          ┌──────┐    │
 │    │ 75%  │          │ 80%  │    │  ← 左右剩余寿命百分比
 │    └──────┘          └──────┘    │
-│   ████░░░░          ██████░░░   │  ← 左右各一个 lv_bar 进度条
+│   ████░░░░          ██████░░░    │  ← 左右各一个 lv_bar 进度条
 │                                  │     左: 对应左滤网剩余寿命
 │                                  │     右: 对应右滤网剩余寿命
 └──────────────────────────────────┘
@@ -208,8 +207,6 @@ if (uart_protocol_has_data()) {
 
 ## 10. 待确认事项
 
-- [ ] `model_type` 各枚举值对应的单/双滤网机型
-- [ ] `left_filter_type` / `right_filter_type` 各枚举值对应滤网类型
 - [ ] 剩余寿命计算采用平均值还是取较低值
 - [ ] 剩余寿命百分比字体大小和样式
 - [ ] 寿命百分比数字与底部边距的精确间距

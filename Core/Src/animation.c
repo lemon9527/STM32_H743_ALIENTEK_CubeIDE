@@ -298,17 +298,17 @@ static void PreRenderUI(void)
         DrawTextAtCenter(240, 496, "TVOC",   f, col);
         DrawTextAtCenter(331, 496, "CO2",    f, col);
 
-        /* Line 2: sensor values (between Line 1 and Line 3) — inter_bold_42, white
+        /* Line 2: sensor values (between Line 1 and Line 3) — inter_bold_32, white
          * Vertically centered: midpoint of Line 1 bottom and Line 3 top.
          *   Line 1 bottom = 496 + lh
          *   Line 3 top    = 604 - lh/2
          *   midpoint = (496 + lh + 604 - lh/2) / 2 = 550 + lh/4
-         *   number top = midpoint - lh_bold42 / 2
+         *   number top = midpoint - lh_bold32 / 2
          */
         {
-            const lv_font_t *f42 = &inter_bold_42;
-            int lh_bold42 = lv_font_get_line_height(f42);
-            int num_top = 550 + lh / 4 - lh_bold42 / 2;
+            const lv_font_t *f32 = &inter_bold_32;
+            int lh_bold32 = lv_font_get_line_height(f32);
+            int num_top = 550 + lh / 4 - lh_bold32 / 2;
             uint16_t white = 0xFFFF; /* ARGB1555 white */
 
             char buf[16];
@@ -323,17 +323,17 @@ static void PreRenderUI(void)
             /* Clear entire number area before drawing to remove any previous
              * digit remnants (even when the new number is shorter than the old).
              * 100px width is enough for 3-digit numbers and safe from blue border. */
-            ClearNumberArea(146, num_top, lh_bold42, 100);
+            ClearNumberArea(146, num_top, lh_bold32, 100);
             snprintf(buf, sizeof(buf), "%u", pm2_5);
-            DrawTextAtCenter(146, num_top, buf, f42, white);
+            DrawTextAtCenter(146, num_top, buf, f32, white);
 
-            ClearNumberArea(240, num_top, lh_bold42, 100);
+            ClearNumberArea(240, num_top, lh_bold32, 100);
             snprintf(buf, sizeof(buf), "%u", tvoc);
-            DrawTextAtCenter(240, num_top, buf, f42, white);
+            DrawTextAtCenter(240, num_top, buf, f32, white);
 
-            ClearNumberArea(331, num_top, lh_bold42, 100);
+            ClearNumberArea(331, num_top, lh_bold32, 100);
             snprintf(buf, sizeof(buf), "%u", co2);
-            DrawTextAtCenter(331, num_top, buf, f42, white);
+            DrawTextAtCenter(331, num_top, buf, f32, white);
         }
 
         /* Line 3: μg/m³, ppb, ppm (centered vertically at y=604) */
@@ -409,30 +409,30 @@ void UpdateAnimationSensorNumbers(void)
     /* Recalculate number position (same logic as PreRenderUI) */
     const lv_font_t *f = &inter_regular_17;
     int lh = lv_font_get_line_height(f);
-    const lv_font_t *f42 = &inter_bold_42;
-    int lh_bold42 = lv_font_get_line_height(f42);
-    int num_top = 550 + lh / 4 - lh_bold42 / 2;
+    const lv_font_t *f32 = &inter_bold_32;
+    int lh_bold32 = lv_font_get_line_height(f32);
+    int num_top = 550 + lh / 4 - lh_bold32 / 2;
     uint16_t white = 0xFFFF; /* ARGB1555 white */
 
     /* Clear each number area before drawing to erase any previous digit
      * remnants. 100px width is enough for 3-digit numbers and safe from
      * the blue border. */
-    ClearNumberArea(146, num_top, lh_bold42, 100);
-    ClearNumberArea(240, num_top, lh_bold42, 100);
-    ClearNumberArea(331, num_top, lh_bold42, 100);
+    ClearNumberArea(146, num_top, lh_bold32, 100);
+    ClearNumberArea(240, num_top, lh_bold32, 100);
+    ClearNumberArea(331, num_top, lh_bold32, 100);
 
     char buf[16];
     sensor_data_t data;
     uart_protocol_get_data(&data);
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)data.pm2_5);
-    DrawTextAtCenter(146, num_top, buf, f42, white);
+    DrawTextAtCenter(146, num_top, buf, f32, white);
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)data.tvoc);
-    DrawTextAtCenter(240, num_top, buf, f42, white);
+    DrawTextAtCenter(240, num_top, buf, f32, white);
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)data.co2);
-    DrawTextAtCenter(331, num_top, buf, f42, white);
+    DrawTextAtCenter(331, num_top, buf, f32, white);
 
     /* Clean D-Cache so LTDC reads the updated numbers from SDRAM */
     SCB_CleanDCache_by_Addr((uint32_t *)UI_BUF_ADDR, 800 * 480 * sizeof(uint16_t));
